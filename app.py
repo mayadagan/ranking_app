@@ -9,6 +9,67 @@ import streamlit as st
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
+def patient_card_html(label: str, p: dict, selected: bool) -> str:
+    years_label = "year" if int(p["age"]) == 1 else "years"
+    sel = " selected" if selected else ""
+    recs_html = "".join(f"<li>{r}</li>" for r in p["recommendations"])
+    # note: everything starts at column 0, no leading spaces/newlines
+    return (
+        f'<div class="card{sel}">'
+        f"<h4>{label}</h4>"
+        f"<p><b>Age:</b> {p['age']} {years_label}</p>"
+        f"<p><b>CVD risk</b>: {p['risk']}%</p>"
+        f"<p><b>Current C-Pi recommendations:</b></p>"
+        f"<ul>{recs_html}</ul>"
+        "</div>"
+    )
+
+st.markdown("""
+<style>
+/* ---- Theme-aware tokens ---- */
+:root{
+  --card-bg: #ffffff;
+  --card-border: #dddddd;
+  --card-shadow: 0 2px 6px rgba(0,0,0,.06);
+  --card-selected-bg: #f0fff4;   /* light green tint */
+  --card-selected-border: #34c759;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --card-bg: #1e1e1e;
+    --card-border: #3a3a3a;
+    --card-shadow: 0 2px 10px rgba(0,0,0,.55);
+    --card-selected-bg: #132a1b; /* darker green tint for dark mode */
+    --card-selected-border: #2ecc71;
+  }
+}
+
+/* ---- Layout & cards ---- */
+.pair-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  align-items:stretch;             /* same height for both cards */
+}
+.pair-grid .card{
+  background: var(--card-bg);
+  border: 3px solid var(--card-border);
+  border-radius:12px;
+  padding:16px;
+  box-shadow: var(--card-shadow);
+  height:100%;
+  color: inherit;                  /* follow Streamlit theme text color */
+  transition: border-color .15s ease, background .15s ease;
+}
+.pair-grid .card.selected{
+  background: var(--card-selected-bg);
+  border-color: var(--card-selected-border);
+}
+.pair-grid .card h4{ margin-top:0; }
+.pair-grid .card ul{ margin-bottom:0; padding-left: 1.1rem; }
+.pair-grid .card li{ margin: .25rem 0; }
+</style>
+""", unsafe_allow_html=True)
 
 # File A lives in your repo at: <repo>/data/file_a.xlsx  (change if needed)
 PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
@@ -16,27 +77,27 @@ PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants & mapping (your mapping)
 _RAW_REC_MAP = {
-    "rec1":  {"Category": "Lab Tests",          "Short": "Basic lab panel", "DL": "Basic lab panel - LDL, HDL, TG, HbA1C, AST, ALT"},
-    "rec2":  {"Category": "Lab Tests",          "Short": "Advanced lab panel", "DL": "Advanced lab panel - ApoB, ApoA1,Lpa"},
-    "rec3":  {"Category": "Lab Tests",          "Short": "Pathophysiology investigation lab panel", "DL": "Genetic testing for Familial Hypercholesterolemia"},
-    "rec4":  {"Category": "Lab Tests",          "Short": "Routine lab monitoring", "DL": "Routine LDL monitoring"},
-    "rec5":  {"Category": "Referals",           "Short": "Diagnostic imaging", "DL": "Routine diagnostic imaging - carotid doppler"},
-    "rec6":  {"Category": "Referals",           "Short": "Advanced diagnostic imaging", "DL": "Advanced diagnostic imaging - CTA/heart perfusion test"},
-    "rec7":  {"Category": "Referals",           "Short": "Diagnostic procedure", "DL": "A diagnostic procedure (e.g., endoscopic procedure, stress test, holter)"},
-    "rec8":  {"Category": "Referals",           "Short": "Take medical measurment", "DL": "Take BP measurment"},
+    "rec1":  {"Category": "Lab Tests",          "Short": "Basic lab panel", "DL": "Basic lab panel (LDL, HDL, TG, HbA1C, AST, ALT)"},
+    "rec2":  {"Category": "Lab Tests",          "Short": "Advanced lab panel", "DL": "Advanced lab panel (Lipoprotein(a), ApoB, ApoA1)"},
+    "rec3":  {"Category": "Lab Tests",          "Short": "Pathophysiology investigation lab panel", "DL": "Pathophysiology-directed lab panel (genetic testing for Familial Hypercholesterolemia)"},
+    "rec4":  {"Category": "Lab Tests",          "Short": "Routine lab monitoring", "DL": "Routine lab monitoring (routine LDL monitoring)"},
+    "rec5":  {"Category": "Referals",           "Short": "Diagnostic imaging", "DL": "Routine diagnostic imaging (carotid doppler)"},
+    "rec6":  {"Category": "Referals",           "Short": "Advanced diagnostic imaging", "DL": "Advanced diagnostic imaging (CTA / heart perfusion test)"},
+    "rec7":  {"Category": "Referals",           "Short": "Diagnostic procedure", "DL": "Diagnostic procedure (endoscopic procedure, stress test, holter)"},
+    "rec8":  {"Category": "Referals",           "Short": "Take medical measurment", "DL": "Medical measurment (take BP measurment)"},
     "rec9":  {"Category": "Treatment",          "Short": "Initiate preventive treatment", "DL": "Initiate preventive treatment"},
-    "rec10": {"Category": "Treatment",          "Short": "Initiate first-line treatment", "DL": "Initiate first-line treatment - low dose statin"},
-    "rec11": {"Category": "Treatment",          "Short": "Initiate advanced treatment", "DL": "Initiate advanced treatment - medium/high dose statin/statin+azetrol/pcsk9"},
-    "rec12": {"Category": "Treatment",          "Short": "Treatment upgrade", "DL": "Treatment upgrade due to poorly controlled LDL"},
+    "rec10": {"Category": "Treatment",          "Short": "Initiate first-line treatment", "DL": "Initiate first-line treatment (low dose statin)"},
+    "rec11": {"Category": "Treatment",          "Short": "Initiate advanced treatment", "DL": "Initiate advanced treatment (medium/high dose statin / statin+azetrol / PCSK9)"},
+    "rec12": {"Category": "Treatment",          "Short": "Treatment upgrade", "DL": "Treatment upgrade (upgrade due to poorly controlled LDL)"},
     "rec13": {"Category": "Treatment",          "Short": "Treatment replacement d/t contraindication", "DL": "Treatment replacement due to contraindication"},
-    "rec14": {"Category": "Treatment",          "Short": "A medical device for treating the condition", "DL": "Strat using a medical device to treat the condition"},
-    "rec15": {"Category": "Treatment",          "Short": "A medical procedure for treating the condition", "DL": "A medical procedure to treat the condition"},
-    "rec16": {"Category": "Consultation",       "Short": "Specialist consultation", "DL": "Specialist consultation - Lipidologist consultation"},
-    "rec17": {"Category": "Consultation",       "Short": "Other consultation", "DL": "Hepatologic consultation - due to high liver enzymes/liver disease"},
-    "rec18": {"Category": "Lifestyle Changes",  "Short": "Nutritiononel consultation", "DL": "Nutritional consultation"},
-    "rec19": {"Category": "Lifestyle Changes",  "Short": "Lifestyle improvement", "DL": "Lifestyle improvement - start exercises, diet adjustments"},
-    "rec20": {"Category": "Lifestyle Changes",  "Short": "Stop harmful habits", "DL": "Lifestyle improvement - stop harmful habits"},
-    "rec21": {"Category": "Other",              "Short": "Curate patient medical record", "DL": "Curate patient medical record"},
+    "rec14": {"Category": "Treatment",          "Short": "A medical device for treating the condition", "DL": "Medical device (start using a medical device to treat the condition)"},
+    "rec15": {"Category": "Treatment",          "Short": "A medical procedure for treating the condition", "DL": "Medical procedure (a medical procedure to treat the condition"},
+    "rec16": {"Category": "Consultation",       "Short": "Specialist consultation", "DL": "Specialist consultation (lipidologist consultation)"},
+    "rec17": {"Category": "Consultation",       "Short": "Other consultation", "DL": "Other consultation (hepatologic consultation due to high liver enzymes / liver disease)"},
+    "rec18": {"Category": "Lifestyle Changes",  "Short": "Nutritional consultation", "DL": "Nutritional consultation"},
+    "rec19": {"Category": "Lifestyle Changes",  "Short": "Lifestyle improvement", "DL": "Lifestyle improvement (start exercise, diet adjustments)"},
+    "rec20": {"Category": "Lifestyle Changes",  "Short": "Stop harmful habits", "DL": "Lifestyle improvement (stop harmful habits)"},
+    "rec21": {"Category": "Other",              "Short": "Curate patient medical record", "DL": "Curate medical record (add diagnosis of dyslipidemia to patient's file)"},
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -191,7 +252,7 @@ def _instructions_body():
   1. Age
   2. Cardiovascular risk score - % risk for CVD event in 10 years
   3. Recommendations this patient currently has on C-Pi
-- Note: in this study, we simulate the **Dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
+- Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
 - Then choose **how sure you are** (1–5).
 - When you finish all pairs, click **download results** and email us the file.
@@ -329,6 +390,7 @@ elif st.session_state.stage == "explain":
     st.header("Before you begin")
     st.markdown(
         """
+- All the data in this study is **synthetic**, and only **simulates** real patients.
 - You will see **pairs of patients** side by side (named X and Y).
 
 - For each patient, you will see a card with information about that patient:
@@ -342,7 +404,7 @@ elif st.session_state.stage == "explain":
 
     st.markdown(
 """
-- Note: in this study, we simulate the **Dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
+- Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).  
 
@@ -376,6 +438,7 @@ elif st.session_state.stage == "running":
     total = len(st.session_state.prepared_pairs)
     if st.session_state.idx >= total:
         st.session_state.stage = "done"
+        st.session_state.just_finished = True   # ← trigger alert on next page
         st.rerun()
 
     # Current pair
@@ -390,13 +453,12 @@ elif st.session_state.stage == "running":
     st.caption(f"Pair {st.session_state.idx+1} of {total}")
 
     # Side-by-side boxes with highlight according to current selection
-    current_choice = st.session_state.get(k_sel)  # "Patient X" or "Patient Y" or None
-    col1, col2 = st.columns(2)
-    with col1:
-        patient_card("Patient X", pair["patient_x"], current_choice == "Patient X")
-    with col2:
-        patient_card("Patient Y", pair["patient_y"], current_choice == "Patient Y")
-    
+    current_choice = st.session_state.get(k_sel)  # "Patient X" / "Patient Y" / None
+    card_x = patient_card_html("Patient X", pair["patient_x"], current_choice == "Patient X")
+    card_y = patient_card_html("Patient Y", pair["patient_y"], current_choice == "Patient Y")
+
+    st.markdown(f'<div class="pair-grid">{card_x}{card_y}</div>', unsafe_allow_html=True)
+   
     st.markdown("")
 
     CONF_LABELS = {
@@ -449,12 +511,27 @@ elif st.session_state.stage == "running":
 
 
     st.divider()
-    st.button("Restart this iteration", on_click=lambda: (
+    st.button("Restart this session", on_click=lambda: (
         st.session_state.update(dict(stage="upload"))
     ))
 
 elif st.session_state.stage == "done":
-    st.success("All pairs completed. Thank you!")
+    if st.session_state.pop("just_finished", False):
+            if hasattr(st, "dialog"):
+                @st.dialog("Very important! Save your results")
+                def _done_alert():
+                    st.success("All pairs completed. Great work!")
+                    st.warning("Please click **Download results (PKL)** now to save your work.\n\n"
+                            "If you leave or refresh without downloading, your results will be lost.")
+                    st.button("OK")
+                _done_alert()
+            else:
+                st.warning("All pairs completed — please click **Download results (PKL)** now to save your work. "
+                        "If you leave or refresh without downloading, your results will be lost.")
+    st.warning("""
+               All pairs completed! please click **Download results (PKL)** now to save your work.
+                If you leave or refresh without downloading, **your results will be lost**.
+               """)
 
     results: List[Tuple[Tuple[int,int], int]] = [r for r in st.session_state.results if r is not None]
     st.write(f"Completed pairs: {len(results)}")
@@ -464,19 +541,20 @@ elif st.session_state.stage == "done":
         df_prev = pd.DataFrame(
             [{"chosen": p[0][0], "other": p[0][1], "confidence": p[1]} for p in results]
         )
-        st.dataframe(df_prev, use_container_width=True, hide_index=True)
+        # st.dataframe(df_prev, use_container_width=True, hide_index=True)
 
     # Prepare PKL download (list of ((i, j), confidence))
     buf = io.BytesIO()
     pickle.dump(results, buf)
     st.download_button(
-        "⬇️ Download results (PKL)",
+        "⬇️ Download results (PKL)", type='primary',
         data=buf.getvalue(),
         file_name=f"rankings_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pkl",
         mime="application/octet-stream",
     )
 
+
     st.divider()
-    st.button("Start a new iteration", on_click=lambda: (
+    st.button("Start a new session", on_click=lambda: (
         st.session_state.update(dict(stage="upload"))
     ))
