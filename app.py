@@ -3,10 +3,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
+from os import PathLike
 import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
+
+
+# File A lives in your repo at: <repo>/data/file_a.xlsx  (change if needed)
+PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants & mapping (your mapping)
@@ -36,6 +41,47 @@ _RAW_REC_MAP = {
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Small helpers
+
+@st.cache_data(show_spinner=False)
+def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File A not found at: {path}")
+
+    suf = path.suffix.lower()
+    if suf == ".csv":
+        df = pd.read_csv(path)
+    elif suf == ".xlsx":
+        # pip install openpyxl
+        df = pd.read_excel(path, engine="openpyxl")
+    elif suf == ".xls":
+        # pip install xlrd==1.2.0  (or convert to .xlsx)
+        df = pd.read_excel(path, engine="xlrd")
+    elif suf in (".pkl", ".pickle"):
+        df = pd.read_pickle(path)
+    else:
+        raise ValueError(f"Unsupported File A extension: {suf}")
+
+    # Normalize & validate columns
+    df.columns = [str(c) for c in df.columns]
+    required = {"patient_num", "age", "risk"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"patient_df missing required columns: {missing}")
+
+    # Ensure rec1..rec21 exist and are ints
+    for i in range(1, 22):
+        col = f"rec{i}"
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = df[col].fillna(0).astype(int)
+
+    df["patient_num"] = df["patient_num"].astype(int)
+    df["age"] = df["age"].astype(int)
+    df["risk"] = df["risk"].astype(int)
+    return df
+
+
 def _rec_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if str(c).lower().startswith("rec")]
 
@@ -143,11 +189,12 @@ def _instructions_body():
 - You will see **pairs of patients** side by side (named X and Y).
 - For each patient you’ll get:
   1. Age
-  2. Cardiovascular risk score <i>(scale 1–40)</i>
-  3. Recommendations this patient currently has in C-Pi
+  2. Cardiovascular risk score - % risk for CVD event in 10 years
+  3. Recommendations this patient currently has on C-Pi
+- Note: in this study, we simulate the **Dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
 - Then choose **how sure you are** (1–5).
-- When you finish all pairs, click **Download results** and email us the file.
+- When you finish all pairs, click **download results** and email us the file.
     """, unsafe_allow_html=True)
 
 # If your Streamlit has st.dialog, we define a modal
@@ -155,7 +202,6 @@ if hasattr(st, "dialog"):
     @st.dialog("Instructions")
     def _open_instructions_dialog():
         _instructions_body()
-        st.button("Close")
 else:
     # Fallback: we’ll use st.popover inline (no-op here)
     def _open_instructions_dialog():
@@ -180,8 +226,8 @@ def patient_card(label: str, p: dict, selected: bool):
         ">
             <h4 style="margin-top:0">{label}</h4>
             <p><b>Age:</b> {p['age']} {years_label}</p>
-            <p><b>CVD risk</b> (scale 1-40): <b>{p['risk']}</b></p>
-            <p><b>Recommendations:</b></p>
+            <p><b>CVD risk</b>: {p['risk']}%</p>
+            <p><b>Current C-Pi recommendations:</b></p>
             <ul>
                 {''.join(f"<li>{r}</li>" for r in p['recommendations'])}
             </ul>
@@ -211,37 +257,38 @@ if "results" not in st.session_state:
 # Pages
 st.title("🩺 Patients Ranking Research")
 
-
 if st.session_state.stage == "upload":
-    st.subheader("Step 1 — Upload the files you recieved by email")
-    c1, c2 = st.columns(2)
-    with c1:
-        patient_df_file = st.file_uploader(
-    "**File A** (Excel file)",
-    type=["csv", "xlsx", "xls"]
-)
-    with c2:
-        pairs_file = st.file_uploader("**File B** (PKL file)", type=["pkl"])
+    st.header("Welcome to the Ranking Project!")
+    st.header("Let's get started.", divider="gray")
 
-    if st.button("Start", type="primary", disabled=not (patient_df_file and pairs_file)):
+    st.subheader("Step 1 — Load the file you recieved by email")
+
+    # Show status of File A (auto-loaded from repo)
+    try:
+        df_preview = load_patient_df_from_repo(PATIENT_DF_PATH)
+        # st.success(f"File A loaded from repo: **{PATIENT_DF_PATH.name}**  •  Patients: **{len(df_preview)}**")
+    except Exception as e:
+        st.error(f"Problem loading data into app: {e}")
+
+    # User only uploads File B
+    pairs_file = st.file_uploader("**Pairs for ranking** (PKL file)", type=["pkl"])
+
+    if st.button("Start", type="primary", disabled=not pairs_file):
+        # Read File A from repo
         try:
-            df = read_patient_df(patient_df_file)
+            df = load_patient_df_from_repo(PATIENT_DF_PATH)
         except Exception as e:
-            st.error(f"Failed to read patient_df: {e}")
+            st.error(f"Failed to load File A from repo: {e}")
             st.stop()
 
-        # basic schema checks
-        required = {"patient_num","age","risk"}
-        if not required.issubset(set(df.columns)):
-            st.error(f"patient_df missing required columns: {required - set(df.columns)}")
-            st.stop()
-
+        # Read File B (pairs)
         try:
             pairs = read_pairs_pkl(pairs_file)
         except Exception as e:
             st.error(f"Failed to read pairs PKL: {e}")
             st.stop()
 
+        # Validate pairs exist in df
         missing = validate_pairs_in_df(df, pairs)
         if missing:
             st.error(f"The following patient_num are missing from patient_df: {missing[:20]}{'...' if len(missing)>20 else ''}")
@@ -251,7 +298,7 @@ if st.session_state.stage == "upload":
         by_id = df.set_index("patient_num").to_dict("index")
 
         # Precompute randomized X/Y orientation per pair (stable through the session)
-        rng = random.Random(42)  # use a fixed seed per session; change if you want different order each run
+        rng = random.Random(42)
         prepared = []
         for a, b in pairs:
             a_dict = normalize_patient({**by_id[a], "patient_num": a})
@@ -261,14 +308,15 @@ if st.session_state.stage == "upload":
             else:
                 patient_x, patient_y = b_dict, a_dict
             prepared.append({"a": a, "b": b, "patient_x": patient_x, "patient_y": patient_y})
-        
+
+        # Prime session
         st.session_state.patient_df = df
         st.session_state.pairs = pairs
         st.session_state.prepared_pairs = prepared
         st.session_state.idx = 0
         st.session_state.pair_counter = 0
         st.session_state.results = [None] * len(prepared)
-        st.session_state.stage = "explain"   # ✅ new
+        st.session_state.stage = "explain"
         st.rerun()
 
 elif st.session_state.stage == "explain":
@@ -284,20 +332,23 @@ elif st.session_state.stage == "explain":
 - You will see **pairs of patients** side by side (named X and Y).
 
 - For each patient, you will see a card with information about that patient:
-    - Age
-    - Cardiovascular risk score (scale 1-40)
-    - Reccomendations this patient currently has in C-Pi
+    - **Age**
+    - Cardiovascular **risk score** - % risk for CVD event in 10 years
+    - **Reccomendations** this patient currently has on C-Pi
+
     """
     )
 
 
     st.markdown(
 """
+- Note: in this study, we simulate the **Dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
+
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).  
 
 - Then choose **how sure you are** (1–5).  
 
-- When you finish all pairs, click **Download results** and email us the file.
+- When you finish all pairs, click **download results** and email us the file.
         """
     )
 
@@ -429,5 +480,3 @@ elif st.session_state.stage == "done":
     st.button("Start a new iteration", on_click=lambda: (
         st.session_state.update(dict(stage="upload"))
     ))
-
-
