@@ -269,6 +269,16 @@ else:
         # This will be replaced with a popover in the UI placement
         pass
 
+def _start_new_session():
+    # jump to upload and clear artifacts safely
+    st.session_state.stage = "upload"
+    st.session_state.idx = 0
+    st.session_state.pair_counter = 0
+    st.session_state.results_downloaded = False
+    st.session_state.pop("results_bytes", None)
+    st.session_state.pop("results_file_name", None)
+    st.rerun()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # UI building blocks
 def patient_card(label: str, p: dict, selected: bool):
@@ -313,7 +323,8 @@ if "pair_counter" not in st.session_state:
     st.session_state.pair_counter = 0     # for fresh widget keys per pair
 if "results" not in st.session_state:
     st.session_state.results = []         # list of ((i, j), confidence)
-
+if "results_downloaded" not in st.session_state:
+    st.session_state.results_downloaded = False
 # ─────────────────────────────────────────────────────────────────────────────
 # Pages
 st.title("🩺 Patients Ranking Research")
@@ -401,7 +412,6 @@ elif st.session_state.stage == "explain":
     """
     )
 
-
     st.markdown(
 """
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
@@ -434,7 +444,6 @@ elif st.session_state.stage == "running":
             with st.popover("❓ Instructions", use_container_width=True):
                 _instructions_body()
 
-
     total = len(st.session_state.prepared_pairs)
     if st.session_state.idx >= total:
         st.session_state.stage = "done"
@@ -445,7 +454,6 @@ elif st.session_state.stage == "running":
     pair = st.session_state.prepared_pairs[st.session_state.idx]
     k_sel  = f"selected_{st.session_state.pair_counter}"
     k_conf = f"conf_{st.session_state.pair_counter}"
-
 
     # Selector below cards
     st.markdown("#### Which patient should be prioritized for proactive intervention?")
@@ -509,52 +517,68 @@ elif st.session_state.stage == "running":
         st.session_state.pair_counter += 1
         st.rerun()
 
-
     st.divider()
-    st.button("Restart this session", on_click=lambda: (
-        st.session_state.update(dict(stage="upload"))
-    ))
 
 elif st.session_state.stage == "done":
-    if st.session_state.pop("just_finished", False):
-            if hasattr(st, "dialog"):
-                @st.dialog("Very important! Save your results")
-                def _done_alert():
-                    st.success("All pairs completed. Great work!")
-                    st.warning("Please click **Download results (PKL)** now to save your work.\n\n"
-                            "If you leave or refresh without downloading, your results will be lost.")
-                    st.button("OK")
-                _done_alert()
-            else:
-                st.warning("All pairs completed — please click **Download results (PKL)** now to save your work. "
-                        "If you leave or refresh without downloading, your results will be lost.")
-    st.warning("""
-               All pairs completed! please click **Download results (PKL)** now to save your work.
-                If you leave or refresh without downloading, **your results will be lost**.
-               """)
-
+    # ---- Build & cache results payload once (stable across reruns) ----
     results: List[Tuple[Tuple[int,int], int]] = [r for r in st.session_state.results if r is not None]
+    if "results_file_name" not in st.session_state or not st.session_state.results_file_name:
+        st.session_state.results_file_name = f"rankings_{datetime.utcnow():%Y%m%d_%H%M%S}.pkl"
+    if "results_bytes" not in st.session_state or not st.session_state.results_bytes:
+        st.session_state.results_bytes = pickle.dumps(results)
+
+    file_name = st.session_state.results_file_name
+    results_bytes = st.session_state.results_bytes  # guaranteed bytes, not None
+
+    # ---- One-time popup with its own download button (no callbacks) ----
+    if st.session_state.pop("just_finished", False) and hasattr(st, "dialog"):
+        @st.dialog("Very important! Save your results")
+        def _done_alert():
+            # st.success("All pairs completed. Great work!")
+            st.warning(
+                "Please click **Download results (PKL)** now to save your work.\n\n"
+                "If you leave or refresh without downloading, your results will be lost."
+            )
+
+        _done_alert()
+    elif st.session_state.get("just_finished", False) and not hasattr(st, "dialog"):
+        st.warning("All pairs completed — please click **Download results (PKL)** now to save your work. "
+                   "If you leave or refresh without downloading, your results will be lost.")
+        st.session_state.just_finished = False
+
+    # ---- Page content ----
+    st.warning(
+        "All pairs completed! Please click **Download results (PKL)** now to save your work.\n"
+        "If you leave or refresh without downloading, **your results will be lost**."
+    )
     st.write(f"Completed pairs: {len(results)}")
 
-    # Show a preview table for convenience
-    if results:
-        df_prev = pd.DataFrame(
-            [{"chosen": p[0][0], "other": p[0][1], "confidence": p[1]} for p in results]
-        )
-        # st.dataframe(df_prev, use_container_width=True, hide_index=True)
-
-    # Prepare PKL download (list of ((i, j), confidence))
-    buf = io.BytesIO()
-    pickle.dump(results, buf)
-    st.download_button(
-        "⬇️ Download results (PKL)", type='primary',
-        data=buf.getvalue(),
-        file_name=f"rankings_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pkl",
+    # Inline download button (separate key). This also flips the same flag.
+    clicked_inline = st.download_button(
+        "⬇️ Download results (PKL)",
+        data=results_bytes,
+        file_name=file_name,
         mime="application/octet-stream",
+        key="dl_inline"
     )
-
+    if clicked_inline:
+        st.session_state.results_downloaded = True
+        st.success("All pairs completed and downloaded. Great work!")
 
     st.divider()
-    st.button("Start a new session", on_click=lambda: (
-        st.session_state.update(dict(stage="upload"))
-    ))
+
+    # Gate the restart button on the flag
+    if not st.session_state.results_downloaded:
+        st.info("Please download your results to enable starting a new session.")
+
+    if st.button("Start a new session", type="primary",
+                disabled=not st.session_state.results_downloaded,
+                key="restart_btn"):
+        # reset for a fresh run
+        st.session_state.stage = "upload"
+        st.session_state.idx = 0
+        st.session_state.pair_counter = 0
+        st.session_state.results_downloaded = False
+        st.session_state.pop("results_bytes", None)
+        st.session_state.pop("results_file_name", None)
+        st.rerun()  # force rerun so the UI switches immediately
