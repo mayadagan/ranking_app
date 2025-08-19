@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
-import openpyxl
 import pandas as pd
 import streamlit as st
 
@@ -430,4 +429,5 @@ elif st.session_state.stage == "done":
     st.button("Start a new iteration", on_click=lambda: (
         st.session_state.update(dict(stage="upload"))
     ))
+
 
