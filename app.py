@@ -6,6 +6,9 @@ from typing import List, Tuple
 from os import PathLike
 import pandas as pd
 import streamlit as st
+from typing import List, Tuple
+from pathlib import Path
+import json, pickle
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
@@ -236,6 +239,60 @@ def read_pairs_pkl(file) -> List[Tuple[int, int]]:
         raise ValueError("No valid pairs found in the PKL.")
     return pairs
 
+
+def read_pairs_file(file) -> List[Tuple[int, int]]:
+    """
+    Reads an uploaded file containing pairs:
+      - .pkl : pickled list/tuple of 2-tuples/lists
+      - .json: JSON list of [a, b] (or (a, b)) items
+    Returns: list of (int, int)
+    """
+    if file is None:
+        raise ValueError("No file provided.")
+
+    # Try to detect by extension; default to PKL if unknown
+    suffix = Path(getattr(file, "name", "")).suffix.lower()
+    parse_as_json = (suffix == ".json")
+
+    # Reset pointer (Streamlit uploader may have been read before)
+    try:
+        file.seek(0)
+    except Exception:
+        pass  # some file-like objects may not support seek
+
+    # Parse
+    try:
+        if parse_as_json:
+            raw = file.read()
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8")
+            data = json.loads(raw)
+        else:
+            # assume pickle by default
+            data = pickle.load(file)
+    except Exception as e:
+        kind = "JSON" if parse_as_json else "PKL"
+        raise ValueError(f"Failed to parse {kind}: {e}") from e
+
+    # Validate & normalize
+    if not isinstance(data, (list, tuple)):
+        raise ValueError("pairs_for_ranking must be a list/tuple of (a, b).")
+
+    pairs: List[Tuple[int, int]] = []
+    for t in data:
+        if not (isinstance(t, (list, tuple)) and len(t) == 2):
+            raise ValueError(f"Invalid pair entry: {t!r}")
+        a, b = int(t[0]), int(t[1])
+        if a == b:
+            continue
+        pairs.append((a, b))
+
+    if not pairs:
+        raise ValueError("No valid pairs found in the file.")
+
+    return pairs
+
+
 def validate_pairs_in_df(df: pd.DataFrame, pairs: List[Tuple[int, int]]) -> List[int]:
     """Return list of missing patient_nums (if any)."""
     ids = set(df["patient_num"].astype(int).tolist())
@@ -343,7 +400,7 @@ if st.session_state.stage == "upload":
         st.error(f"Problem loading data into app: {e}")
 
     # User only uploads File B
-    pairs_file = st.file_uploader("**Pairs for ranking** (PKL file)", type=["pkl"])
+    pairs_file = st.file_uploader("**Pairs for ranking** (PKL/JSON file)", type=["pkl", "json"])
 
     if st.button("Start", type="primary", disabled=not pairs_file):
         # Read File A from repo
@@ -355,7 +412,7 @@ if st.session_state.stage == "upload":
 
         # Read File B (pairs)
         try:
-            pairs = read_pairs_pkl(pairs_file)
+            pairs = read_pairs_file(pairs_file)
         except Exception as e:
             st.error(f"Failed to read pairs PKL: {e}")
             st.stop()
@@ -525,7 +582,8 @@ elif st.session_state.stage == "done":
     if "results_file_name" not in st.session_state or not st.session_state.results_file_name:
         st.session_state.results_file_name = f"rankings_{datetime.utcnow():%Y%m%d_%H%M%S}.pkl"
     if "results_bytes" not in st.session_state or not st.session_state.results_bytes:
-        st.session_state.results_bytes = pickle.dumps(results)
+        # st.session_state.results_bytes = pickle.dumps(results)
+        st.session_state.results_bytes = json.dumps(results)
 
     file_name = st.session_state.results_file_name
     results_bytes = st.session_state.results_bytes  # guaranteed bytes, not None
