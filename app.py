@@ -307,7 +307,7 @@ def _instructions_body():
 - You will see **pairs of patients** side by side (named X and Y).
 - For each patient you’ll get:
   1. Age
-  2. Cardiovascular risk score - % risk for CVD event in 10 years
+  2. Cardiovascular risk score - % risk for first CVD event in 10 years
   3. Recommendations this patient currently has on C-Pi
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
@@ -463,7 +463,7 @@ elif st.session_state.stage == "explain":
 
 - For each patient, you will see a card with information about that patient:
     - **Age**
-    - Cardiovascular **risk score** - % risk for CVD event in 10 years
+    - Cardiovascular **risk score** - % risk for first CVD event in 10 years
     - **Reccomendations** this patient currently has on C-Pi
 
     """
