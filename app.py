@@ -9,6 +9,8 @@ import streamlit as st
 from typing import List, Tuple
 from pathlib import Path
 import json, pickle
+import base64
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
@@ -145,6 +147,29 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["risk"] = df["risk"].astype(int)
     return df
 
+def _auto_download_blob(file_name: str, data_bytes: bytes):
+    """Triggers a client-side download of data_bytes as file_name."""
+    b64 = base64.b64encode(data_bytes).decode("ascii")
+    # Use a data: URL so no server endpoint is needed
+    components.html(
+        f"""
+        <script>
+        (function() {{
+          try {{
+            const a = document.createElement('a');
+            a.href = "data:application/json;base64,{b64}";
+            a.download = {json.dumps(file_name)};
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(()=>document.body.removeChild(a), 0);
+          }} catch(e) {{
+            console.error("auto-download failed", e);
+          }}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
 
 def _rec_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if str(c).lower().startswith("rec")]
@@ -326,6 +351,66 @@ else:
         # This will be replaced with a popover in the UI placement
         pass
 
+def _build_results_payload() -> dict:
+    """Build a resume-able snapshot of the user's progress (JSON-safe)."""
+    answered = [r for r in st.session_state.results if r is not None]
+    return {
+        "version": 1,
+        "generated_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "total_pairs": int(len(st.session_state.prepared_pairs or [])),
+        "answered_pairs": int(len(answered)),
+        "current_index": int(st.session_state.idx or 0),
+        "results": answered,  # list of [[a,b], conf] or [(a,b), conf] is fine
+    }
+
+def _serialize_results_json(payload: dict) -> tuple[bytes, str, str]:
+    """Return JSON as bytes + name + mime."""
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    return data, f"rankings_{ts}.json", "application/json"
+
+def load_progress_json(file) -> dict:
+    """Read a JSON snapshot and return the dict. Minimal validation."""
+    raw = file.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    data = json.loads(raw)
+    if not isinstance(data, dict) or "results" not in data:
+        raise ValueError("Invalid progress JSON.")
+    return data
+
+def apply_snapshot_to_session(snapshot: dict):
+    """Merge a snapshot back into session (assumes the same prepared_pairs)."""
+    st.session_state.idx = int(snapshot.get("current_index", 0))
+    # Expand any tuples to lists just in case
+    cleaned = []
+    for item in snapshot.get("results", []):
+        pair, conf = item
+        a, b = pair
+        cleaned.append(((int(a), int(b)), int(conf)))
+    # pad to length
+    total = len(st.session_state.prepared_pairs or [])
+    st.session_state.results = [None] * total
+    for i, val in enumerate(cleaned[:total]):
+        st.session_state.results[i] = val
+        
+def save_progress_ui_json(key_suffix: str = ""):
+    """Render inline Save (JSON) button. key_suffix keeps keys unique."""
+    payload = _build_results_payload()
+    data, fname, mime = _serialize_results_json(payload)
+
+    # small right-side save button
+    c1, c2 = st.columns([1, 0.22])
+    with c2:
+        st.download_button(
+            "💾 Download progress",
+            data=data,
+            file_name=fname,
+            mime=mime,
+            key=f"save_json_{key_suffix}",
+            help="Download a JSON snapshot of your current progress",
+        )
+
 def _start_new_session():
     # jump to upload and clear artifacts safely
     st.session_state.stage = "upload"
@@ -382,6 +467,8 @@ if "results" not in st.session_state:
     st.session_state.results = []         # list of ((i, j), confidence)
 if "results_downloaded" not in st.session_state:
     st.session_state.results_downloaded = False
+if "_auto_dl_ready" not in st.session_state:
+    st.session_state._auto_dl_ready = None  # dict: {"name": str, "bytes": bytes}
 # ─────────────────────────────────────────────────────────────────────────────
 # Pages
 st.title("🩺 Patients Ranking Research")
@@ -491,6 +578,20 @@ elif st.session_state.stage == "explain":
 elif st.session_state.stage == "running":
     # st.markdown("For the pairs below, choose which patiets should be prioritized for proactive intervention (higher on the C-Pi focus list)")
 # Top row with a right-aligned help button
+    _auto = st.session_state._auto_dl_ready
+    if _auto:
+        _auto_download_blob(_auto["name"], _auto["bytes"])
+        # Visible fallback in case the browser blocks programmatic download
+        with st.expander("Download backup (fallback)"):
+            st.download_button(
+                "⬇️ Download autosave (JSON)",
+                data=_auto["bytes"],
+                file_name=_auto["name"],
+                mime="application/json",
+                key=f"dl_fallback_{st.session_state.pair_counter}"
+            )
+        st.session_state._auto_dl_ready = None
+
     left_spacer, right_btn = st.columns([1, 0.2])
     with right_btn:
         if hasattr(st, "dialog"):
@@ -504,19 +605,19 @@ elif st.session_state.stage == "running":
     total = len(st.session_state.prepared_pairs)
     if st.session_state.idx >= total:
         st.session_state.stage = "done"
-        st.session_state.just_finished = True   # ← trigger alert on next page
+        st.session_state.just_finished = True
         st.rerun()
 
-    # Current pair
     pair = st.session_state.prepared_pairs[st.session_state.idx]
     k_sel  = f"selected_{st.session_state.pair_counter}"
     k_conf = f"conf_{st.session_state.pair_counter}"
 
-    # Selector below cards
     st.markdown("#### Which patient should be prioritized for proactive intervention?")
-
     st.caption(f"Pair {st.session_state.idx+1} of {total}")
 
+    # NEW: save JSON on every page
+    save_progress_ui_json(key_suffix=f"run_{st.session_state.pair_counter}")
+    
     # Side-by-side boxes with highlight according to current selection
     current_choice = st.session_state.get(k_sel)  # "Patient X" / "Patient Y" / None
     card_x = patient_card_html("Patient X", pair["patient_x"], current_choice == "Patient X")
@@ -572,6 +673,21 @@ elif st.session_state.stage == "running":
         st.session_state.results[st.session_state.idx] = (out_pair, conf)
         st.session_state.idx += 1
         st.session_state.pair_counter += 1
+
+        # Build a fresh JSON snapshot of current progress
+        payload = _build_results_payload()
+        data, fname, mime = _serialize_results_json(payload)
+        st.session_state.results_bytes = data
+        st.session_state.results_file_name = fname
+
+        # Every 5 submissions (and also on the last pair), queue an auto-download
+        is_multiple_of_5 = (st.session_state.idx % 5 == 0)   # note: idx already incremented above
+        is_last = (st.session_state.idx >= total)
+        if is_multiple_of_5 or is_last:
+            # Include progress marker in filename (optional)
+            fname5 = f"rankings_checkpoint_up_to_{st.session_state.idx:03d}_{datetime.utcnow():%Y%m%d_%H%M%S}_UTC.json"
+            st.session_state._auto_dl_ready = {"name": fname5, "bytes": data}
+
         st.rerun()
 
     st.divider()
@@ -589,36 +705,40 @@ elif st.session_state.stage == "done":
     results_bytes = st.session_state.results_bytes  # guaranteed bytes, not None
 
     # ---- One-time popup with its own download button (no callbacks) ----
-    if st.session_state.pop("just_finished", False) and hasattr(st, "dialog"):
-        @st.dialog("Very important! Save your results")
-        def _done_alert():
-            # st.success("All pairs completed. Great work!")
-            st.warning(
-                "Please click **Download results (PKL)** now to save your work.\n\n"
-                "If you leave or refresh without downloading, your results will be lost."
-            )
+    # if st.session_state.pop("just_finished", False) and hasattr(st, "dialog"):
+    #     @st.dialog("Very important! Save your results")
+    #     def _done_alert():
+    #         # st.success("All pairs completed. Great work!")
+    #         st.warning(
+    #             "Please click **Download results** now to save your work.\n\n"
+    #             "If you leave or refresh without downloading, your results will be lost."
+    #         )
 
-        _done_alert()
-    elif st.session_state.get("just_finished", False) and not hasattr(st, "dialog"):
-        st.warning("All pairs completed — please click **Download results (PKL)** now to save your work. "
+    #     _done_alert()
+    if st.session_state.get("just_finished", False) and not hasattr(st, "dialog"):
+        st.warning("All pairs completed — please click **Download results** now to save your work. "
                    "If you leave or refresh without downloading, your results will be lost.")
         st.session_state.just_finished = False
 
     # ---- Page content ----
-    st.warning(
-        "All pairs completed! Please click **Download results (PKL)** now to save your work.\n"
-        "If you leave or refresh without downloading, **your results will be lost**."
-    )
-    st.write(f"Completed pairs: {len(results)}")
+
 
     # Inline download button (separate key). This also flips the same flag.
+    st.write(f"Completed pairs: {len(results)}")
+
     clicked_inline = st.download_button(
-        "⬇️ Download results (PKL)",
+        "⬇️ Download results",
         data=results_bytes,
         file_name=file_name,
         mime="application/octet-stream",
         key="dl_inline"
     )
+    if not clicked_inline:
+        st.warning(
+        "IMPORTANT! Click **download results** now to save your work.\n"
+        "If you leave or refresh without downloading, **your results will be lost**.", icon="🚨"
+    )
+
     if clicked_inline:
         st.session_state.results_downloaded = True
         st.success("All pairs completed and downloaded. Great work!")
