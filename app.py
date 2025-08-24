@@ -146,6 +146,33 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["risk"] = df["risk"].astype(int)
     return df
 
+import re
+
+def _slugify(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9._-]+", "_", s)
+    return s.strip("_")
+
+def _compose_output_filename(upload_name: str, user_name: str | None) -> str:
+    """
+    Rules:
+    - Start from the uploaded file's stem (ignore original extension).
+    - If the stem doesn't already include the user name slug, prefix it.
+    - Always end with `_ranked.json`.
+    """
+    stem = Path(upload_name).stem                     # e.g. "train_initial_100_pairs"
+    user_slug = _slugify(user_name or "")
+    stem_norm = _slugify(stem)
+
+    # add user prefix if missing
+    if user_slug and user_slug not in stem_norm:
+        stem = f"{user_slug}_{stem}"
+
+    # add `_ranked` if missing
+    if not stem.lower().endswith("_ranked"):
+        stem = f"{stem}_ranked"
+
+    return f"{stem}.json"
 
 def _rec_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if str(c).lower().startswith("rec")]
@@ -237,7 +264,7 @@ def read_pairs_pkl(file) -> List[Tuple[int, int]]:
             continue
         pairs.append((a, b))
     if not pairs:
-        raise ValueError("No valid pairs found in the PKL.")
+        raise ValueError("No valid pairs found.")
     return pairs
 
 
@@ -381,11 +408,61 @@ def save_progress_ui_json(key_suffix: str = ""):
         st.download_button(
             "💾 Download progress",
             data=data,
-            file_name=fname,
-            mime=mime,
+            file_name=st.session_state.results_file_name,
+            mime="application/json",
             key=f"save_json_{key_suffix}",
             help="Download a JSON snapshot of your current progress",
         )
+
+def apply_snapshot_to_session_smart(snapshot: dict):
+    """
+    Map answers from a progress JSON onto the current prepared_pairs list,
+    regardless of X/Y orientation or pair order in the snapshot.
+    """
+    prepared = st.session_state.prepared_pairs or []
+    n = len(prepared)
+    if n == 0:
+        raise RuntimeError("No prepared_pairs in session; load pairs first.")
+
+    # Build index map: both (a,b) and (b,a) point to the same index
+    idx_map: dict[tuple[int,int], int] = {}
+    for i, pr in enumerate(prepared):
+        a, b = int(pr["a"]), int(pr["b"])
+        idx_map[(a, b)] = i
+        idx_map[(b, a)] = i
+
+    # Initialize empty results
+    results: List[Tuple[Tuple[int,int], int]] = [None] * n  # type: ignore
+
+    placed = 0
+    for item in snapshot.get("results", []):
+        try:
+            pair, conf = item
+            a, b = int(pair[0]), int(pair[1])
+            conf = int(conf)
+        except Exception:
+            continue  # skip malformed rows
+
+        i = idx_map.get((a, b))
+        if i is None:
+            # pair not found in current session; ignore
+            continue
+
+        # Normalize stored pair to the canonical (a,b) of prepared_pairs[i]
+        canon_a, canon_b = int(prepared[i]["a"]), int(prepared[i]["b"])
+        results[i] = ((canon_a, canon_b), conf)
+        placed += 1
+
+    # Find next unanswered index
+    try:
+        next_idx = next(k for k, v in enumerate(results) if v is None)
+    except StopIteration:
+        next_idx = n  # done
+
+    st.session_state.results = results
+    st.session_state.idx = next_idx
+    st.session_state.pair_counter = next_idx  # keep widget keys advancing
+    return placed, n, next_idx
 
 def _start_new_session():
     # jump to upload and clear artifacts safely
@@ -428,6 +505,10 @@ def patient_card(label: str, p: dict, selected: bool):
 # ─────────────────────────────────────────────────────────────────────────────
 # State init
 if "stage" not in st.session_state:
+    st.session_state.stage = "login"   # start at login
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
+if "stage" not in st.session_state:
     st.session_state.stage = "upload"   # "upload" -> "running" -> "done"
 if "patient_df" not in st.session_state:
     st.session_state.patient_df = None
@@ -440,10 +521,28 @@ if "idx" not in st.session_state:
 if "pair_counter" not in st.session_state:
     st.session_state.pair_counter = 0     # for fresh widget keys per pair
 if "results" not in st.session_state:
-    st.session_state.results = []         # list of ((i, j), confidence)
+    st.session_state.results = []         # list of ((i, j), confidence) 
 if "results_downloaded" not in st.session_state:
     st.session_state.results_downloaded = False
+
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────
+# Login screen
+# ─────────────────────────────────────────────────────────────
+if st.session_state.get("stage") == "login" or "user_name" not in st.session_state:
+    st.header("Sign in to start")
+    st.caption("Enter your full name in English.")
+
+    name = st.text_input("Your full name in English (required)", value=st.session_state.get("user_name", ""), placeholder="e.g., Dana Levi")
+    if name:
+        if st.button("Continue", type="primary", disabled=(len(name.strip()) < 2)):
+            st.session_state.user_name = name.strip()
+            st.session_state.stage = "upload"
+            st.rerun()
+
+    st.stop()  # don’t render the rest of the app until login is done
+
 # Pages
 st.title("🩺 Patients Ranking Research")
 
@@ -461,7 +560,10 @@ if st.session_state.stage == "upload":
         st.error(f"Problem loading data into app: {e}")
 
     # User only uploads File B
-    pairs_file = st.file_uploader("**Pairs for ranking** (PKL/JSON file)", type=["pkl", "json"])
+    pairs_file = st.file_uploader("**Pairs for ranking** (JSON file)", type=["json", "pkl"])
+    st.subheader("Optional — load previous progress from this round")
+
+    progress_file = st.file_uploader("**Optional** - load previous progress from this round (JSON)", type=["json"], key="progress_upload")
 
     if st.button("Start", type="primary", disabled=not pairs_file):
         # Read File A from repo
@@ -477,6 +579,8 @@ if st.session_state.stage == "upload":
         except Exception as e:
             st.error(f"Failed to read pairs PKL: {e}")
             st.stop()
+
+        st.session_state.input_filename = getattr(pairs_file, "name", "pairs.json")
 
         # Validate pairs exist in df
         missing = validate_pairs_in_df(df, pairs)
@@ -506,6 +610,15 @@ if st.session_state.stage == "upload":
         st.session_state.idx = 0
         st.session_state.pair_counter = 0
         st.session_state.results = [None] * len(prepared)
+
+        if progress_file is not None:
+            try:
+                snapshot = load_progress_json(progress_file)
+                placed, n, next_idx = apply_snapshot_to_session_smart(snapshot)
+                st.success(f"Loaded progress: restored {placed}/{n} answers. Resuming at pair {min(next_idx+1, n)}.")
+            except Exception as e:
+                st.warning(f"Could not apply progress file: {e}")
+
         st.session_state.stage = "explain"
         st.rerun()
 
@@ -575,6 +688,14 @@ elif st.session_state.stage == "running":
     st.markdown("#### Which patient should be prioritized for proactive intervention?")
     st.caption(f"Pair {st.session_state.idx+1} of {total}")
 
+    # Derive output name from the uploaded file + user
+    uploaded_name = st.session_state.get("input_filename", "pairs.json")
+    user_name = st.session_state.get("user_name")  # from your login step
+    out_name = _compose_output_filename(uploaded_name, user_name)
+
+    # Cache once
+    if "results_file_name" not in st.session_state or not st.session_state.results_file_name:
+        st.session_state.results_file_name = out_name
     # NEW: save JSON on every page
     save_progress_ui_json(key_suffix=f"run_{st.session_state.pair_counter}")
     
@@ -638,28 +759,26 @@ elif st.session_state.stage == "running":
     st.divider()
 
 elif st.session_state.stage == "done":
-    # ---- Build & cache results payload once (stable across reruns) ----
+# Build the payload you save (you currently save just the results list)
     results: List[Tuple[Tuple[int,int], int]] = [r for r in st.session_state.results if r is not None]
+    payload = results  # or switch to _build_results_payload() if you prefer
+
+    # Derive output name from the uploaded file + user
+    uploaded_name = st.session_state.get("input_filename", "pairs.json")
+    user_name = st.session_state.get("user_name")  # from your login step
+    out_name = _compose_output_filename(uploaded_name, user_name)
+
+    # Cache once
     if "results_file_name" not in st.session_state or not st.session_state.results_file_name:
-        st.session_state.results_file_name = f"rankings_{datetime.utcnow():%Y%m%d_%H%M%S}.pkl"
+        st.session_state.results_file_name = out_name
+
     if "results_bytes" not in st.session_state or not st.session_state.results_bytes:
-        # st.session_state.results_bytes = pickle.dumps(results)
-        st.session_state.results_bytes = json.dumps(results)
+        st.session_state.results_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+
 
     file_name = st.session_state.results_file_name
     results_bytes = st.session_state.results_bytes  # guaranteed bytes, not None
 
-    # ---- One-time popup with its own download button (no callbacks) ----
-    # if st.session_state.pop("just_finished", False) and hasattr(st, "dialog"):
-    #     @st.dialog("Very important! Save your results")
-    #     def _done_alert():
-    #         # st.success("All pairs completed. Great work!")
-    #         st.warning(
-    #             "Please click **Download results** now to save your work.\n\n"
-    #             "If you leave or refresh without downloading, your results will be lost."
-    #         )
-
-    #     _done_alert()
     if st.session_state.get("just_finished", False) and not hasattr(st, "dialog"):
         st.warning("All pairs completed — please click **Download results** now to save your work. "
                    "If you leave or refresh without downloading, your results will be lost.")
@@ -673,10 +792,10 @@ elif st.session_state.stage == "done":
 
     clicked_inline = st.download_button(
         "⬇️ Download results",
-        data=results_bytes,
-        file_name=file_name,
-        mime="application/octet-stream",
-        key="dl_inline"
+        data=st.session_state.results_bytes,
+        file_name=st.session_state.results_file_name,
+        mime="application/json",
+        key="dl_inline",
     )
     if not clicked_inline:
         st.warning(
