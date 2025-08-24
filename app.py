@@ -9,8 +9,7 @@ import streamlit as st
 from typing import List, Tuple
 from pathlib import Path
 import json, pickle
-import base64
-import streamlit.components.v1 as components
+
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
@@ -147,29 +146,6 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["risk"] = df["risk"].astype(int)
     return df
 
-def _auto_download_blob(file_name: str, data_bytes: bytes):
-    """Triggers a client-side download of data_bytes as file_name."""
-    b64 = base64.b64encode(data_bytes).decode("ascii")
-    # Use a data: URL so no server endpoint is needed
-    components.html(
-        f"""
-        <script>
-        (function() {{
-          try {{
-            const a = document.createElement('a');
-            a.href = "data:application/json;base64,{b64}";
-            a.download = {json.dumps(file_name)};
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(()=>document.body.removeChild(a), 0);
-          }} catch(e) {{
-            console.error("auto-download failed", e);
-          }}
-        }})();
-        </script>
-        """,
-        height=0,
-    )
 
 def _rec_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if str(c).lower().startswith("rec")]
@@ -467,8 +443,6 @@ if "results" not in st.session_state:
     st.session_state.results = []         # list of ((i, j), confidence)
 if "results_downloaded" not in st.session_state:
     st.session_state.results_downloaded = False
-if "_auto_dl_ready" not in st.session_state:
-    st.session_state._auto_dl_ready = None  # dict: {"name": str, "bytes": bytes}
 # ─────────────────────────────────────────────────────────────────────────────
 # Pages
 st.title("🩺 Patients Ranking Research")
@@ -578,20 +552,6 @@ elif st.session_state.stage == "explain":
 elif st.session_state.stage == "running":
     # st.markdown("For the pairs below, choose which patiets should be prioritized for proactive intervention (higher on the C-Pi focus list)")
 # Top row with a right-aligned help button
-    _auto = st.session_state._auto_dl_ready
-    if _auto:
-        _auto_download_blob(_auto["name"], _auto["bytes"])
-        # Visible fallback in case the browser blocks programmatic download
-        with st.expander("Download backup (fallback)"):
-            st.download_button(
-                "⬇️ Download autosave (JSON)",
-                data=_auto["bytes"],
-                file_name=_auto["name"],
-                mime="application/json",
-                key=f"dl_fallback_{st.session_state.pair_counter}"
-            )
-        st.session_state._auto_dl_ready = None
-
     left_spacer, right_btn = st.columns([1, 0.2])
     with right_btn:
         if hasattr(st, "dialog"):
@@ -673,21 +633,6 @@ elif st.session_state.stage == "running":
         st.session_state.results[st.session_state.idx] = (out_pair, conf)
         st.session_state.idx += 1
         st.session_state.pair_counter += 1
-
-        # Build a fresh JSON snapshot of current progress
-        payload = _build_results_payload()
-        data, fname, mime = _serialize_results_json(payload)
-        st.session_state.results_bytes = data
-        st.session_state.results_file_name = fname
-
-        # Every 5 submissions (and also on the last pair), queue an auto-download
-        is_multiple_of_5 = (st.session_state.idx % 5 == 0)   # note: idx already incremented above
-        is_last = (st.session_state.idx >= total)
-        if is_multiple_of_5 or is_last:
-            # Include progress marker in filename (optional)
-            fname5 = f"rankings_checkpoint_up_to_{st.session_state.idx:03d}_{datetime.utcnow():%Y%m%d_%H%M%S}_UTC.json"
-            st.session_state._auto_dl_ready = {"name": fname5, "bytes": data}
-
         st.rerun()
 
     st.divider()
