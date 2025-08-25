@@ -524,6 +524,8 @@ if "results" not in st.session_state:
     st.session_state.results = []         # list of ((i, j), confidence) 
 if "results_downloaded" not in st.session_state:
     st.session_state.results_downloaded = False
+if "placed" not in st.session_state:
+    st.session_state.placed = 0
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -615,6 +617,7 @@ if st.session_state.stage == "upload":
             try:
                 snapshot = load_progress_json(progress_file)
                 placed, n, next_idx = apply_snapshot_to_session_smart(snapshot)
+                st.session_state.placed = placed
                 st.success(f"Loaded progress: restored {placed}/{n} answers. Resuming at pair {min(next_idx+1, n)}.")
             except Exception as e:
                 st.warning(f"Could not apply progress file: {e}")
@@ -654,8 +657,8 @@ elif st.session_state.stage == "explain":
 - When you finish all pairs, click **download results** and email us the file.
         """
     )
-
-    st.info(f"Pairs to review: **{total}**")    
+    st.info(f"Pairs to review: **{total - st.session_state.placed}**")    
+ 
 
     c1= st.columns([1])
     if st.button("Start", type="primary"):
@@ -733,25 +736,54 @@ elif st.session_state.stage == "running":
     conf   = st.session_state.get(k_conf)  # int 1..5
 
     can_submit = (choice is not None) and (conf is not None)
-    if st.button("Submit", type="primary", disabled=not can_submit):
+    # if st.button("Submit", type="primary", disabled=not can_submit):
+
+
+    #     a, b = pair["a"], pair["b"]
+
+    #     if choice == "Patient X":
+    #         chosen_id = pair["patient_x"]["id"]
+    #         other_id  = pair["patient_y"]["id"]
+    #     else:
+    #         chosen_id = pair["patient_y"]["id"]
+    #         other_id  = pair["patient_x"]["id"]
+
+    #     if (chosen_id, other_id) == (a, b):
+    #         out_pair = (a, b)
+    #     elif (chosen_id, other_id) == (b, a):
+    #         out_pair = (b, a)
+    #     else:
+    #         out_pair = (chosen_id, other_id)  # safety fallback
+
+    #     # conf is already an int
+    #     st.session_state.results[st.session_state.idx] = (out_pair, conf)
+    #     st.session_state.idx += 1
+    #     st.session_state.pair_counter += 1
+    #     st.rerun()
+
+    if st.button("Submit", type="primary"):
+        choice = st.session_state.get(k_sel, None)
+        conf   = st.session_state.get(k_conf, None)
+
+        # hard validation
+        if choice not in ("Patient X", "Patient Y"):
+            st.warning("Please choose Patient X or Patient Y before submitting.")
+            st.stop()
+        if conf not in (1, 2, 3, 4, 5):
+            st.warning("Please choose a confidence between 1–5.")
+            st.stop()
+
         a, b = pair["a"], pair["b"]
-
         if choice == "Patient X":
-            chosen_id = pair["patient_x"]["id"]
-            other_id  = pair["patient_y"]["id"]
-        else:
-            chosen_id = pair["patient_y"]["id"]
-            other_id  = pair["patient_x"]["id"]
+            chosen_id, other_id = pair["patient_x"]["id"], pair["patient_y"]["id"]
+        elif choice == "Patient Y":
+            chosen_id, other_id = pair["patient_y"]["id"], pair["patient_x"]["id"]
 
-        if (chosen_id, other_id) == (a, b):
-            out_pair = (a, b)
-        elif (chosen_id, other_id) == (b, a):
-            out_pair = (b, a)
-        else:
-            out_pair = (chosen_id, other_id)  # safety fallback
+        if   (chosen_id, other_id) == (a, b): out_pair = (a, b)
+        elif (chosen_id, other_id) == (b, a): out_pair = (b, a)
+        else:                                 out_pair = (chosen_id, other_id)
 
-        # conf is already an int
-        st.session_state.results[st.session_state.idx] = (out_pair, conf)
+        st.session_state.results[st.session_state.idx] = (out_pair, int(conf))
         st.session_state.idx += 1
         st.session_state.pair_counter += 1
         st.rerun()
