@@ -532,39 +532,19 @@ if "placed" not in st.session_state:
 # ─────────────────────────────────────────────────────────────
 # Login screen
 # ─────────────────────────────────────────────────────────────
-# if st.session_state.get("stage") == "login" or "user_name" not in st.session_state:
-#     st.header("Sign in to start")
-#     st.caption("Enter your full name in English.")
-
-#     name = st.text_input("Your full name in English (required)", value=st.session_state.get("user_name", ""), placeholder="e.g., Dana Levi")
-#     if name:
-#         if st.button("Continue", type="primary", disabled=(len(name.strip()) < 2)):
-#             st.session_state.user_name = name.strip()
-#             st.session_state.stage = "upload"
-#             st.rerun()
-
-#     st.stop()  # don’t render the rest of the app until login is done
-
-# ─────────────────────────────────────────────────────────────
-# Login screen (use a form to avoid accidental double 'Enter')
-# ─────────────────────────────────────────────────────────────
-if st.session_state.get("stage") == "login" or not st.session_state.get("user_name"):
+if st.session_state.get("stage") == "login" or "user_name" not in st.session_state:
     st.header("Sign in to start")
     st.caption("Enter your full name in English.")
-    with st.form("login_form", clear_on_submit=False):
-        name = st.text_input(
-            "Your full name in English (required)",
-            value=st.session_state.get("user_name", ""),
-            placeholder="e.g., Dana Levi",
-            key="login_name",
-        )
-        proceed = st.form_submit_button("Continue", type="primary", disabled=(len(name.strip()) < 2))
-    if proceed:
-        st.session_state.user_name = name.strip()
-        st.session_state.stage = "upload"
-        st.rerun()
-    st.stop()
-    
+
+    name = st.text_input("Your full name in English (required)", value=st.session_state.get("user_name", ""), placeholder="e.g., Dana Levi")
+    if name:
+        if st.button("Continue", type="primary", disabled=(len(name.strip()) < 2)):
+            st.session_state.user_name = name.strip()
+            st.session_state.stage = "upload"
+            st.rerun()
+
+    st.stop()  # don’t render the rest of the app until login is done
+
 # Pages
 st.title("🩺 Patients Ranking Research")
 
