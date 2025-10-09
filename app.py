@@ -142,7 +142,7 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
 
     rec_cols = [c for c in df.columns if c.startswith("rec")]
     # Ensure rec1..rec21 exist and are ints
-    for i in range(len(rec_cols)):
+    for i in range(1, len(rec_cols) + 1):
         col = f"rec{i}"
         if col not in df.columns:
             df[col] = 0
@@ -254,7 +254,7 @@ def read_patient_df(file) -> pd.DataFrame:
 
     rec_cols = [c for c in df.columns if c.startswith("rec")]
     # Ensure rec1..rec21 exist and are ints
-    for i in range(len(rec_cols)):
+    for i in range(1, len(rec_cols) + 1):
         col = f"rec{i}"
         if col not in df.columns:
             df[col] = 0
@@ -502,33 +502,7 @@ def _start_new_session():
     st.session_state.pop("results_file_name", None)
     st.rerun()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# # UI building blocks
-# def patient_card(label: str, p: dict, selected: bool):
-#     bg = "#f0fff4" if selected else "#ffffff"
-#     border = "#34c759" if selected else "#ddd"
-#     years_label = "year" if int(p["age"]) == 1 else "years"
-#     st.markdown(
-#         f"""
-#         <div style="
-#             border: 3px solid {border};
-#             border-radius: 12px;
-#             padding: 16px;
-#             background-color: {bg};
-#             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-#             min-height: 220px;
-#         ">
-#             <h4 style="margin-top:0">{label}</h4>
-#             <p><b>Age:</b> {p['age']} {years_label}</p>
-#             <p><b>CVD risk</b>: {p['risk']}%</p>
-#             <p><b>Current C-Pi recommendations:</b></p>
-#             <ul>
-#                 {''.join(f"<li>{r}</li>" for r in p['recommendations'])}
-#             </ul>
-#         </div>
-#         """,
-#         unsafe_allow_html=True
-#     )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # State init
@@ -536,8 +510,6 @@ if "stage" not in st.session_state:
     st.session_state.stage = "login"   # start at login
 if "user_name" not in st.session_state:
     st.session_state.user_name = None
-if "stage" not in st.session_state:
-    st.session_state.stage = "upload"   # "upload" -> "running" -> "done"
 if "patient_df" not in st.session_state:
     st.session_state.patient_df = None
 if "pairs" not in st.session_state:
@@ -560,19 +532,39 @@ if "placed" not in st.session_state:
 # ─────────────────────────────────────────────────────────────
 # Login screen
 # ─────────────────────────────────────────────────────────────
-if st.session_state.get("stage") == "login" or "user_name" not in st.session_state:
+# if st.session_state.get("stage") == "login" or "user_name" not in st.session_state:
+#     st.header("Sign in to start")
+#     st.caption("Enter your full name in English.")
+
+#     name = st.text_input("Your full name in English (required)", value=st.session_state.get("user_name", ""), placeholder="e.g., Dana Levi")
+#     if name:
+#         if st.button("Continue", type="primary", disabled=(len(name.strip()) < 2)):
+#             st.session_state.user_name = name.strip()
+#             st.session_state.stage = "upload"
+#             st.rerun()
+
+#     st.stop()  # don’t render the rest of the app until login is done
+
+# ─────────────────────────────────────────────────────────────
+# Login screen (use a form to avoid accidental double 'Enter')
+# ─────────────────────────────────────────────────────────────
+if st.session_state.get("stage") == "login" or not st.session_state.get("user_name"):
     st.header("Sign in to start")
     st.caption("Enter your full name in English.")
-
-    name = st.text_input("Your full name in English (required)", value=st.session_state.get("user_name", ""), placeholder="e.g., Dana Levi")
-    if name:
-        if st.button("Continue", type="primary", disabled=(len(name.strip()) < 2)):
-            st.session_state.user_name = name.strip()
-            st.session_state.stage = "upload"
-            st.rerun()
-
-    st.stop()  # don’t render the rest of the app until login is done
-
+    with st.form("login_form", clear_on_submit=False):
+        name = st.text_input(
+            "Your full name in English (required)",
+            value=st.session_state.get("user_name", ""),
+            placeholder="e.g., Dana Levi",
+            key="login_name",
+        )
+        proceed = st.form_submit_button("Continue", type="primary", disabled=(len(name.strip()) < 2))
+    if proceed:
+        st.session_state.user_name = name.strip()
+        st.session_state.stage = "upload"
+        st.rerun()
+    st.stop()
+    
 # Pages
 st.title("🩺 Patients Ranking Research")
 
