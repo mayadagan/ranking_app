@@ -9,12 +9,18 @@ import streamlit as st
 from typing import List, Tuple
 from pathlib import Path
 import json, pickle
+import re
 
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
 def patient_card_html(label: str, p: dict, selected: bool) -> str:
     years_label = "year" if int(p["age"]) == 1 else "years"
+    sex_label = "male" if int(p["sex"]) == 1 else "female"
+    smoker_label = "yes" if int(p["smoker"]) == 1 else "no"
+    diabetes_label = "yes" if int(p["diabetes"]) == 1 else "no"
+
+
     sel = " selected" if selected else ""
     recs_html = "".join(f"<li>{r}</li>" for r in p["recommendations"])
     # note: everything starts at column 0, no leading spaces/newlines
@@ -22,7 +28,13 @@ def patient_card_html(label: str, p: dict, selected: bool) -> str:
         f'<div class="card{sel}">'
         f"<h4>{label}</h4>"
         f"<p><b>Age:</b> {p['age']} {years_label}</p>"
-        f"<p><b>CVD risk</b>: {p['risk']}%</p>"
+        f"<p><b>Sex:</b>: {sex_label}</p>"
+        f"<p><b>CVD risk (SCORE2):</b>: {p['risk']}%</p>"
+        f"<p><b>BMI:</b>: {p['bmi']}</p>"
+        f"<p><b>Smoker:</b>: {smoker_label}</p>"
+        f"<p><b>Diabetic:</b>: {diabetes_label}</p>"
+        f"<p><b>Socio-economic level (1 lowest, 10 highest):</b>: {p['socio_economic']}</p>"
+        f"<p><b>Adherence level:</b>: {p['adherence']}</p>"
         f"<p><b>Current C-Pi recommendations:</b></p>"
         f"<ul>{recs_html}</ul>"
         "</div>"
@@ -78,30 +90,24 @@ st.markdown("""
 # File A lives in your repo at: <repo>/data/file_a.xlsx  (change if needed)
 PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Constants & mapping (your mapping)
+# Constants & mapping (new 15-rec setup)
 _RAW_REC_MAP = {
-    "rec1":  {"Category": "Lab Tests",          "Short": "Basic lab panel", "DL": "Basic lab panel (LDL, HDL, TG, HbA1C, AST, ALT)"},
-    "rec2":  {"Category": "Lab Tests",          "Short": "Advanced lab panel", "DL": "Advanced lab panel (Lipoprotein(a), ApoB, ApoA1)"},
-    "rec3":  {"Category": "Lab Tests",          "Short": "Pathophysiology investigation lab panel", "DL": "Pathophysiology-directed lab panel (genetic testing for Familial Hypercholesterolemia)"},
-    "rec4":  {"Category": "Lab Tests",          "Short": "Routine lab monitoring", "DL": "Routine lab monitoring (routine LDL monitoring)"},
-    "rec5":  {"Category": "Referals",           "Short": "Diagnostic imaging", "DL": "Routine diagnostic imaging (carotid doppler)"},
-    "rec6":  {"Category": "Referals",           "Short": "Advanced diagnostic imaging", "DL": "Advanced diagnostic imaging (CTA / heart perfusion test)"},
-    "rec7":  {"Category": "Referals",           "Short": "Diagnostic procedure", "DL": "Diagnostic procedure (endoscopic procedure, stress test, holter)"},
-    "rec8":  {"Category": "Referals",           "Short": "Take medical measurment", "DL": "Medical measurment (take BP measurment)"},
-    "rec9":  {"Category": "Treatment",          "Short": "Initiate preventive treatment", "DL": "Initiate preventive treatment"},
-    "rec10": {"Category": "Treatment",          "Short": "Initiate first-line treatment", "DL": "Initiate first-line treatment (low dose statin)"},
-    "rec11": {"Category": "Treatment",          "Short": "Initiate advanced treatment", "DL": "Initiate advanced treatment (medium/high dose statin / statin+azetrol / PCSK9)"},
-    "rec12": {"Category": "Treatment",          "Short": "Treatment upgrade", "DL": "Treatment upgrade (upgrade due to poorly controlled LDL)"},
-    "rec13": {"Category": "Treatment",          "Short": "Treatment replacement d/t contraindication", "DL": "Treatment replacement due to contraindication"},
-    "rec14": {"Category": "Treatment",          "Short": "A medical device for treating the condition", "DL": "Medical device (start using a medical device to treat the condition)"},
-    "rec15": {"Category": "Treatment",          "Short": "A medical procedure for treating the condition", "DL": "Medical procedure (a medical procedure to treat the condition"},
-    "rec16": {"Category": "Consultation",       "Short": "Specialist consultation", "DL": "Specialist consultation (lipidologist consultation)"},
-    "rec17": {"Category": "Consultation",       "Short": "Other consultation", "DL": "Other consultation (hepatologic consultation due to high liver enzymes / liver disease)"},
-    "rec18": {"Category": "Lifestyle Changes",  "Short": "Nutritional consultation", "DL": "Nutritional consultation"},
-    "rec19": {"Category": "Lifestyle Changes",  "Short": "Lifestyle improvement", "DL": "Lifestyle improvement (start exercise, diet adjustments)"},
-    "rec20": {"Category": "Lifestyle Changes",  "Short": "Stop harmful habits", "DL": "Lifestyle improvement (stop harmful habits)"},
-    "rec21": {"Category": "Other",              "Short": "Curate patient medical record", "DL": "Curate medical record (add diagnosis of dyslipidemia to patient's file)"},
+    "rec1":  {"DL": "Labs (for risk stratification / screening) - lipid panel  (cost 2)"},
+    "rec2":  {"DL": "Labs (for therapy monitoring) - liver enzymes (cost 1)"},
+    "rec3":  {"DL": "Labs (for risk stratification / screening) - Lp(a) (cost 6)"},
+    "rec4":  {"DL": "Labs (for therapy monitoring) – LDL (cost 2)"},
+    "rec5":  {"DL": "Imaging (for risk stratification) - carotid doppler (cost 20)"},
+    "rec6":  {"DL": "Treatment (initiate first-line treatment) – low dose statin (yearly cost 200)"},
+    "rec7":  {"DL": "Treatment (initiate advanced treatment) - medium/high dose statin/statin+azetrol (yearly cost 240)"},
+    "rec8":  {"DL": "Treatment (prescribe advanced treatment) - PCSK9 (yearly cost 20,000)"},
+    "rec9":  {"DL": "Treatment (upgrade) - switch to an advanced statin, due to poorly controlled LDL (yearly cost 240)"},
+    "rec10": {"DL": "Treatment (replacement d/t contraindication) - switch to PCSK9 (yearly cost 20,000)"},
+    "rec11": {"DL": "Consults - lipidologist consultation due to statins treatment failure / intolerance, to consider PCSK9 (cost 6)"},
+    "rec12": {"DL": "Consults - hepatology consult d/t high liver enzymes after statin initiation (cost 5)"},
+    "rec13": {"DL": "Lifestyle - nutritional consultation, package of 7 sessions (cost 20)"},
+    "rec14": {"DL": "Treatment (treatment discussion) - discuss of pros and cons of drug vs lifestyle treatment with grey zone patients (cost 2)"},
+    "rec15": {"DL": "Lifestyle - consult patient about excercise, nutrition and smoking cessation (cost 2)"},
+    "rec16": {"DL": "Lifestyle - reccomend the use of AHA 'Heart & Stroke Helper' app for tracking lipid levels, medications and lifestyle habits to improve cholestrol control (cost 0)"}
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -129,13 +135,14 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
 
     # Normalize & validate columns
     df.columns = [str(c) for c in df.columns]
-    required = {"patient_num", "age", "risk"}
+    required = {"patient_num", "age", "risk", "sex", "adherence", "bmi", "diabetes", "smoker", "socio_economic"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"patient_df missing required columns: {missing}")
 
+    rec_cols = [c for c in df.columns if c.startswith("rec")]
     # Ensure rec1..rec21 exist and are ints
-    for i in range(1, 22):
+    for i in range(len(rec_cols)):
         col = f"rec{i}"
         if col not in df.columns:
             df[col] = 0
@@ -144,9 +151,13 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["patient_num"] = df["patient_num"].astype(int)
     df["age"] = df["age"].astype(int)
     df["risk"] = df["risk"].astype(int)
+    df["sex"] = df["sex"].astype(int)
+    df["bmi"] = df["bmi"].astype(float)
+    df["adherence"] = df["adherence"].astype(str)
+    df["diabetes"] = df["diabetes"].astype(int)
+    df["smoker"] = df["smoker"].astype(int)
+    df["socio_economic"] = df["socio_economic"].astype(int)
     return df
-
-import re
 
 def _slugify(s: str) -> str:
     s = (s or "").strip().lower()
@@ -194,6 +205,12 @@ def normalize_patient(row_dict: dict) -> dict:
         "id": int(row_dict.get("patient_num")),
         "age": int(row_dict.get("age")),
         "risk": int(row_dict.get("risk")),
+        "sex": int(row_dict.get("sex")), 
+        "bmi": float(row_dict.get("bmi")), 
+        "adherence": str(row_dict.get("adherence")), 
+        "diabetes": int(row_dict.get("diabetes")), 
+        "smoker": int(row_dict.get("smoker")), 
+        "socio_economic": int(row_dict.get("socio_economic")), 
         "recommendations": recs_from_row(row_dict),
     }
 
@@ -229,24 +246,29 @@ def read_patient_df(file) -> pd.DataFrame:
     df.columns = [str(c) for c in df.columns]
 
     # Required columns
-    required = {"patient_num", "age", "risk"}
+    required = {"patient_num", "age", "risk", "sex", "adherence", "bmi", "diabetes", "smoker", "socio_economic"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"patient_df missing required columns: {missing}")
 
-    # Ensure rec1..rec21 exist (fill with 0 if absent)
-    for i in range(1, 22):
+
+    rec_cols = [c for c in df.columns if c.startswith("rec")]
+    # Ensure rec1..rec21 exist and are ints
+    for i in range(len(rec_cols)):
         col = f"rec{i}"
         if col not in df.columns:
             df[col] = 0
+        df[col] = df[col].fillna(0).astype(int)
 
-    # Coerce dtypes
     df["patient_num"] = df["patient_num"].astype(int)
     df["age"] = df["age"].astype(int)
     df["risk"] = df["risk"].astype(int)
-    for i in range(1, 22):
-        df[f"rec{i}"] = df[f"rec{i}"].fillna(0).astype(int)
-
+    df["sex"] = df["sex"].astype(int)
+    df["bmi"] = df["bmi"].astype(float)
+    df["adherence"] = df["adherence"].astype(str)
+    df["diabetes"] = df["diabetes"].astype(int)
+    df["smoker"] = df["smoker"].astype(int)
+    df["socio_economic"] = df["socio_economic"].astype(int)
     return df
 
 def read_pairs_pkl(file) -> List[Tuple[int, int]]:
@@ -335,8 +357,14 @@ def _instructions_body():
 - You will see **pairs of patients** side by side (named X and Y).
 - For each patient you’ll get:
   1. Age
-  2. Cardiovascular risk score - % risk for first CVD event in 10 years (primary prevention)
-  3. Recommendations this patient currently has on C-Pi
+  2. Sex              
+  3. Cardiovascular risk score (SCORE2)- % risk for first CVD event in 10 years (primary prevention)
+  4. BMI
+  5. Smoking status
+  6. Diabets status
+  7. Socio-economic level (1 lowest, 10 highest)
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown.)            
+  9. Recommendations this patient currently has on C-Pi
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
 - Then choose **how sure you are** (1–5).
@@ -475,32 +503,32 @@ def _start_new_session():
     st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UI building blocks
-def patient_card(label: str, p: dict, selected: bool):
-    bg = "#f0fff4" if selected else "#ffffff"
-    border = "#34c759" if selected else "#ddd"
-    years_label = "year" if int(p["age"]) == 1 else "years"
-    st.markdown(
-        f"""
-        <div style="
-            border: 3px solid {border};
-            border-radius: 12px;
-            padding: 16px;
-            background-color: {bg};
-            box-shadow: 0 2px 6px rgba(0,0,0,0.04);
-            min-height: 220px;
-        ">
-            <h4 style="margin-top:0">{label}</h4>
-            <p><b>Age:</b> {p['age']} {years_label}</p>
-            <p><b>CVD risk</b>: {p['risk']}%</p>
-            <p><b>Current C-Pi recommendations:</b></p>
-            <ul>
-                {''.join(f"<li>{r}</li>" for r in p['recommendations'])}
-            </ul>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# # UI building blocks
+# def patient_card(label: str, p: dict, selected: bool):
+#     bg = "#f0fff4" if selected else "#ffffff"
+#     border = "#34c759" if selected else "#ddd"
+#     years_label = "year" if int(p["age"]) == 1 else "years"
+#     st.markdown(
+#         f"""
+#         <div style="
+#             border: 3px solid {border};
+#             border-radius: 12px;
+#             padding: 16px;
+#             background-color: {bg};
+#             box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+#             min-height: 220px;
+#         ">
+#             <h4 style="margin-top:0">{label}</h4>
+#             <p><b>Age:</b> {p['age']} {years_label}</p>
+#             <p><b>CVD risk</b>: {p['risk']}%</p>
+#             <p><b>Current C-Pi recommendations:</b></p>
+#             <ul>
+#                 {''.join(f"<li>{r}</li>" for r in p['recommendations'])}
+#             </ul>
+#         </div>
+#         """,
+#         unsafe_allow_html=True
+#     )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # State init
@@ -572,7 +600,7 @@ if st.session_state.stage == "upload":
         try:
             df = load_patient_df_from_repo(PATIENT_DF_PATH)
         except Exception as e:
-            st.error(f"Failed to load File A from repo: {e}")
+            st.error(f"Failed to load basic research data from repo: {e}")
             st.stop()
 
         # Read File B (pairs)
@@ -639,9 +667,15 @@ elif st.session_state.stage == "explain":
 - You will see **pairs of patients** side by side (named X and Y).
 
 - For each patient, you will see a card with information about that patient:
-    - **Age**
-    - Cardiovascular **risk score** - % risk for first CVD event in 10 years (primary prevention)
-    - **Reccomendations** this patient currently has on C-Pi
+  1. Age
+  2. Sex              
+  3. Cardiovascular risk score (SCORE2)- % risk for first CVD event in 10 years (primary prevention)
+  4. BMI
+  5. Smoking status
+  6. Diabets status
+  7. Socio-economic level (1 lowest, 10 highest)
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown.)            
+  9. Recommendations this patient currently has on C-Pi
 
     """
     )
@@ -736,31 +770,6 @@ elif st.session_state.stage == "running":
     conf   = st.session_state.get(k_conf)  # int 1..5
 
     can_submit = (choice is not None) and (conf is not None)
-    # if st.button("Submit", type="primary", disabled=not can_submit):
-
-
-    #     a, b = pair["a"], pair["b"]
-
-    #     if choice == "Patient X":
-    #         chosen_id = pair["patient_x"]["id"]
-    #         other_id  = pair["patient_y"]["id"]
-    #     else:
-    #         chosen_id = pair["patient_y"]["id"]
-    #         other_id  = pair["patient_x"]["id"]
-
-    #     if (chosen_id, other_id) == (a, b):
-    #         out_pair = (a, b)
-    #     elif (chosen_id, other_id) == (b, a):
-    #         out_pair = (b, a)
-    #     else:
-    #         out_pair = (chosen_id, other_id)  # safety fallback
-
-    #     # conf is already an int
-    #     st.session_state.results[st.session_state.idx] = (out_pair, conf)
-    #     st.session_state.idx += 1
-    #     st.session_state.pair_counter += 1
-    #     st.rerun()
-
     if st.button("Submit", type="primary"):
         choice = st.session_state.get(k_sel, None)
         conf   = st.session_state.get(k_conf, None)
