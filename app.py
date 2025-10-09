@@ -28,13 +28,13 @@ def patient_card_html(label: str, p: dict, selected: bool) -> str:
         f'<div class="card{sel}">'
         f"<h4>{label}</h4>"
         f"<p><b>Age:</b> {p['age']} {years_label}</p>"
-        f"<p><b>Sex:</b>: {sex_label}</p>"
-        f"<p><b>CVD risk (SCORE2):</b>: {p['risk']}%</p>"
-        f"<p><b>BMI:</b>: {p['bmi']}</p>"
-        f"<p><b>Smoker:</b>: {smoker_label}</p>"
-        f"<p><b>Diabetic:</b>: {diabetes_label}</p>"
-        f"<p><b>Socio-economic level (1 lowest, 10 highest):</b>: {p['socio_economic']}</p>"
-        f"<p><b>Adherence level:</b>: {p['adherence']}</p>"
+        f"<p><b>Sex:</b> {sex_label}</p>"
+        f"<p><b>CVD risk (SCORE2):</b> {p['risk']}%</p>"
+        f"<p><b>BMI:</b> {p['bmi']}</p>"
+        f"<p><b>Smoker:</b> {smoker_label}</p>"
+        f"<p><b>Diabetic:</b> {diabetes_label}</p>"
+        f"<p><b>Socio-economic level (1 lowest, 10 highest):</b> {p['socio_economic']}</p>"
+        f"<p><b>Adherence level:</b> {p['adherence']}</p>"
         f"<p><b>Current C-Pi recommendations:</b></p>"
         f"<ul>{recs_html}</ul>"
         "</div>"
@@ -107,7 +107,7 @@ _RAW_REC_MAP = {
     "rec13": {"DL": "Lifestyle - nutritional consultation, package of 7 sessions (cost 20)"},
     "rec14": {"DL": "Treatment (treatment discussion) - discuss of pros and cons of drug vs lifestyle treatment with grey zone patients (cost 2)"},
     "rec15": {"DL": "Lifestyle - consult patient about excercise, nutrition and smoking cessation (cost 2)"},
-    "rec16": {"DL": "Lifestyle - reccomend the use of AHA 'Heart & Stroke Helper' app for tracking lipid levels, medications and lifestyle habits to improve cholestrol control (cost 0)"}
+    "rec16": {"DL": 'Lifestyle - reccomend the use of the AHA "Heart & Stroke Helper" app for tracking lipid levels, medications and lifestyle habits to improve cholestrol control (cost 0)'}
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -358,12 +358,12 @@ def _instructions_body():
 - For each patient you’ll get:
   1. Age
   2. Sex              
-  3. Cardiovascular risk score (SCORE2)- % risk for first CVD event in 10 years (primary prevention)
+  3. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
   4. BMI
   5. Smoking status
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
-  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown.)            
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
   9. Recommendations this patient currently has on C-Pi
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
@@ -669,12 +669,12 @@ elif st.session_state.stage == "explain":
 - For each patient, you will see a card with information about that patient:
   1. Age
   2. Sex              
-  3. Cardiovascular risk score (SCORE2)- % risk for first CVD event in 10 years (primary prevention)
+  3. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
   4. BMI
   5. Smoking status
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
-  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown.)            
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
   9. Recommendations this patient currently has on C-Pi
 
     """
