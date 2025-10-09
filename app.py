@@ -33,7 +33,7 @@ def patient_card_html(label: str, p: dict, selected: bool) -> str:
         f"<p><b>BMI:</b> {p['bmi']}</p>"
         f"<p><b>Smoker:</b> {smoker_label}</p>"
         f"<p><b>Diabetic:</b> {diabetes_label}</p>"
-        f"<p><b>Socio-economic level (1 lowest, 10 highest):</b> {p['socio_economic']}</p>"
+        f"<p><b>Socio-economic level:</b> {p['socio_economic']}</p>"
         f"<p><b>Adherence level:</b> {p['adherence']}</p>"
         f"<p><b>Current C-Pi recommendations:</b></p>"
         f"<ul>{recs_html}</ul>"
@@ -92,21 +92,21 @@ PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 
 # Constants & mapping (new 15-rec setup)
 _RAW_REC_MAP = {
-    "rec1":  {"DL": "Labs (for risk stratification / screening) - lipid panel  (cost 2)"},
-    "rec2":  {"DL": "Labs (for therapy monitoring) - liver enzymes (cost 1)"},
-    "rec3":  {"DL": "Labs (for risk stratification / screening) - Lp(a) (cost 6)"},
-    "rec4":  {"DL": "Labs (for therapy monitoring) – LDL (cost 2)"},
-    "rec5":  {"DL": "Imaging (for risk stratification) - carotid doppler (cost 20)"},
-    "rec6":  {"DL": "Treatment (initiate first-line treatment) – low dose statin (yearly cost 200)"},
-    "rec7":  {"DL": "Treatment (initiate advanced treatment) - medium/high dose statin/statin+azetrol (yearly cost 240)"},
-    "rec8":  {"DL": "Treatment (prescribe advanced treatment) - PCSK9 (yearly cost 20,000)"},
-    "rec9":  {"DL": "Treatment (upgrade) - switch to an advanced statin, due to poorly controlled LDL (yearly cost 240)"},
-    "rec10": {"DL": "Treatment (replacement d/t contraindication) - switch to PCSK9 (yearly cost 20,000)"},
-    "rec11": {"DL": "Consults - lipidologist consultation due to statins treatment failure / intolerance, to consider PCSK9 (cost 6)"},
-    "rec12": {"DL": "Consults - hepatology consult d/t high liver enzymes after statin initiation (cost 5)"},
-    "rec13": {"DL": "Lifestyle - nutritional consultation, package of 7 sessions (cost 20)"},
-    "rec14": {"DL": "Treatment (treatment discussion) - discuss of pros and cons of drug vs lifestyle treatment with grey zone patients (cost 2)"},
-    "rec15": {"DL": "Lifestyle - consult patient about excercise, nutrition and smoking cessation (cost 2)"},
+    "rec1":  {"DL": "Labs - for risk stratification / screening: lipid panel  (cost 2)"},
+    "rec2":  {"DL": "Labs - for therapy monitoring: liver enzymes (cost 1)"},
+    "rec3":  {"DL": "Labs - for risk stratification / screening:  Lp(a) (cost 6)"},
+    "rec4":  {"DL": "Labs - for therapy monitoring: LDL (cost 2)"},
+    "rec5":  {"DL": "Imaging - for risk stratification: carotid doppler (cost 20)"},
+    "rec6":  {"DL": "Treatment - initiate first-line treatment: low dose statin (yearly cost 200)"},
+    "rec7":  {"DL": "Treatment - initiate advanced treatment: medium/high dose statin/statin+azetrol (yearly cost 240)"},
+    "rec8":  {"DL": "Treatment - prescribe advanced treatment: PCSK9 (yearly cost 20,000)"},
+    "rec9":  {"DL": "Treatment - upgrade: switch to an advanced statin, d/t poorly controlled LDL (yearly cost 240)"},
+    "rec10": {"DL": "Treatment - replacement d/t contraindication: switch to PCSK9 (yearly cost 20,000)"},
+    "rec11": {"DL": "Consults - lipidologist consultation: d/t statins treatment failure / intolerance, to consider PCSK9 (cost 6)"},
+    "rec12": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)"},
+    "rec13": {"DL": "Lifestyle - nutritional consultation: a package of 7 sessions (cost 20)"},
+    "rec14": {"DL": "Treatment - discussion of pros and cons of drug vs lifestyle treatment with grey zone patients (cost 2)"},
+    "rec15": {"DL": "Lifestyle - consult patient abut excercise, nutrition and smoking cessation (cost 2)"},
     "rec16": {"DL": 'Lifestyle - reccomend the use of the AHA "Heart & Stroke Helper" app for tracking lipid levels, medications and lifestyle habits to improve cholestrol control (cost 0)'}
 }
 
@@ -198,7 +198,7 @@ def recs_from_row(row_dict: dict) -> list[str]:
             pass
         if val:
             out.append(meta["DL"])
-    return out or ["(no active recommendations)"]
+    return out or ["no active recommendations"]
 
 def normalize_patient(row_dict: dict) -> dict:
     return {
@@ -364,7 +364,7 @@ def _instructions_body():
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
-  9. Recommendations this patient currently has on C-Pi
+  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
 - Then choose **how sure you are** (1–5).
@@ -675,7 +675,7 @@ elif st.session_state.stage == "explain":
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
-  9. Recommendations this patient currently has on C-Pi
+  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 
     """
     )
