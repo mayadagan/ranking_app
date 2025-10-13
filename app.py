@@ -39,6 +39,7 @@ def patient_card_html(label: str, p: dict, selected: bool) -> str:
         f"<p><b>Smoker:</b> {smoker_label}</p>"
         f"<p><b>Diabetic:</b> {diabetes_label}</p>"
         f"<p><b>Socio-economic level:</b> {ses_label}</p>"
+        f"<p><b>Adherence:</b> {adherence_label}</p>"
         f"<p><b>Current C-Pi recommendations:</b></p>"
         f"<ul>{recs_html}</ul>"
         "</div>"
