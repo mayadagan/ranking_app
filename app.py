@@ -14,12 +14,17 @@ import re
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
+def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
+    return mapping.get(val, fallback)
+
 def patient_card_html(label: str, p: dict, selected: bool) -> str:
     years_label = "year" if int(p["age"]) == 1 else "years"
     sex_label = "male" if int(p["sex"]) == 1 else "female"
     smoker_label = "yes" if int(p["smoker"]) == 1 else "no"
     diabetes_label = "yes" if int(p["diabetes"]) == 1 else "no"
-
+    adherence_label = "not applicable (no chronic meds)" if str(p["adherence"]) == 'none' else p["adherence"]
+    ses_label = _map_level(int(p["socio_economic"]), {1: "low", 2: "medium", 3: "high"})
+    risk_band_label = _map_level(int(p["risk_band"]), {1: "low", 2: "medium", 3: "high"})
 
     sel = " selected" if selected else ""
     recs_html = "".join(f"<li>{r}</li>" for r in p["recommendations"])
@@ -29,12 +34,11 @@ def patient_card_html(label: str, p: dict, selected: bool) -> str:
         f"<h4>{label}</h4>"
         f"<p><b>Age:</b> {p['age']} {years_label}</p>"
         f"<p><b>Sex:</b> {sex_label}</p>"
-        f"<p><b>CVD risk (SCORE2):</b> {p['risk']}%</p>"
+        f"<p><b>10-year CVD risk (SCORE2):</b> {p['risk']}% ({risk_band_label} for age)</p>"
         f"<p><b>BMI:</b> {p['bmi']}</p>"
         f"<p><b>Smoker:</b> {smoker_label}</p>"
         f"<p><b>Diabetic:</b> {diabetes_label}</p>"
-        f"<p><b>Socio-economic level:</b> {p['socio_economic']}</p>"
-        f"<p><b>Adherence level:</b> {p['adherence']}</p>"
+        f"<p><b>Socio-economic level:</b> {ses_label}</p>"
         f"<p><b>Current C-Pi recommendations:</b></p>"
         f"<ul>{recs_html}</ul>"
         "</div>"
@@ -92,22 +96,22 @@ PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 
 # Constants & mapping (new 15-rec setup)
 _RAW_REC_MAP = {
-    "rec1":  {"DL": "Labs - for risk stratification / screening: lipid panel  (cost 2)"},
-    "rec2":  {"DL": "Labs - for therapy monitoring: liver enzymes (cost 1)"},
+    "rec1":  {"DL": "Labs - for risk stratification / screening: lipid panel (cost 2)"},
+    "rec2":  {"DL": "Labs - for treatment monitoring: liver enzymes (cost 1)"},
     "rec3":  {"DL": "Labs - for risk stratification / screening:  Lp(a) (cost 6)"},
-    "rec4":  {"DL": "Labs - for therapy monitoring: LDL (cost 2)"},
+    "rec4":  {"DL": "Labs - for treatment monitoring: LDL (cost 2)"},
     "rec5":  {"DL": "Imaging - for risk stratification: carotid doppler (cost 20)"},
     "rec6":  {"DL": "Treatment - initiate first-line treatment: low dose statin (yearly cost 200)"},
-    "rec7":  {"DL": "Treatment - initiate advanced treatment: medium/high dose statin/statin+azetrol (yearly cost 240)"},
+    "rec7":  {"DL": "Treatment - initiate advanced treatment: high dose statin (yearly cost 200)"},
     "rec8":  {"DL": "Treatment - prescribe advanced treatment: PCSK9 (yearly cost 20,000)"},
-    "rec9":  {"DL": "Treatment - upgrade: switch to an advanced statin, d/t poorly controlled LDL (yearly cost 240)"},
+    "rec9":  {"DL": "Treatment - upgrade: switch to a high dose statin (yearly cost 200)"},
     "rec10": {"DL": "Treatment - replacement d/t contraindication: switch to PCSK9 (yearly cost 20,000)"},
-    "rec11": {"DL": "Consults - lipidologist consultation: d/t statins treatment failure / intolerance, to consider PCSK9 (cost 6)"},
+    "rec11": {"DL": "Consults - lipidologist consult: d/t statins failure/intolerance, to consider PCSK9 (cost 6)"},
     "rec12": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)"},
-    "rec13": {"DL": "Lifestyle - nutritional consultation: a package of 7 sessions (cost 20)"},
-    "rec14": {"DL": "Treatment - discussion of pros and cons of drug vs lifestyle treatment with grey zone patients (cost 2)"},
-    "rec15": {"DL": "Lifestyle - consult patient abut excercise, nutrition and smoking cessation (cost 2)"},
-    "rec16": {"DL": 'Lifestyle - reccomend the use of the AHA "Heart & Stroke Helper" app for tracking lipid levels, medications and lifestyle habits to improve cholestrol control (cost 0)'}
+    "rec13": {"DL": "Lifestyle - dietitian: referral for a package of nutritional consultation sessions (cost 20)"},
+    "rec14": {"DL": "Treatment - discuss pros/cons of drug treatment vs. lifestyle changes in gray-zone patients (cost 2)"},
+    "rec15": {"DL": "Lifestyle - consult about exercise, nutrition, and smoking cessation (cost 2)"},
+    "rec16": {"DL": 'Lifestyle - reccomend the AHA "Heart & Stroke Helper" app to track lipids, meds and lifestyle (cost 0)'}
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -205,6 +209,7 @@ def normalize_patient(row_dict: dict) -> dict:
         "id": int(row_dict.get("patient_num")),
         "age": int(row_dict.get("age")),
         "risk": int(row_dict.get("risk")),
+        "risk_band": int(row_dict.get("risk_band")),
         "sex": int(row_dict.get("sex")), 
         "bmi": float(row_dict.get("bmi")), 
         "adherence": str(row_dict.get("adherence")), 
@@ -363,7 +368,7 @@ def _instructions_body():
   5. Smoking status
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
-  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
@@ -646,7 +651,7 @@ elif st.session_state.stage == "explain":
   5. Smoking status
   6. Diabets status
   7. Socio-economic level (1 lowest, 10 highest)
-  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chornic medications prescribed, else unknown)            
+  8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 
     """
