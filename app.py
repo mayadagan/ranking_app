@@ -10,14 +10,16 @@ from typing import List, Tuple
 from pathlib import Path
 import json, pickle
 import re
-
+import textwrap
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
 def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
     return mapping.get(val, fallback)
 
-def patient_card_html(label: str, p: dict, selected: bool, category_order: list[str] | None = None) -> str:
+def patient_card_html(label: str, p: dict, selected: bool, side: str,
+                      category_order: list[str] | None = None,
+                      per_category_master: dict[str, list[str]] | None = None) -> str:
     sex_label       = "male" if int(p["sex"]) == 1 else "female"
     smoker_label    = "yes" if int(p["smoker"]) == 1 else "no"
     diabetes_label  = "yes" if int(p["diabetes"]) == 1 else "no"
@@ -26,123 +28,148 @@ def patient_card_html(label: str, p: dict, selected: bool, category_order: list[
     adherence_val   = str(p.get("adherence", "none"))
     adherence_lab   = "not applicable (no chronic meds)" if adherence_val == "none" else adherence_val
     bmi_val         = float(p["bmi"])
-    sel             = " selected" if selected else ""
-    # recs_html       = "".join(f"<li>{r}</li>" for r in p.get("recommendations", []))
-    # recs_html = recs_grouped_html_for_patient(p)
-    recs_html = recs_grouped_html_for_patient(p, category_order=category_order)
+    sel_class       = " selected" if selected else ""
+    recs_html = recs_grouped_html_for_patient(
+        p, category_order=category_order, per_category_master=per_category_master
+    )
 
-    return f"""
-<div class="card{sel}">
-  <div class="card-badge">{label}</div>
+    html = f"""
+<div class="frame {side}{sel_class}"></div>
 
-  <!-- Demographics -->
-  <div class="section">
-    <div class="section-title">Demographics</div>
-    <div class="row row-3">
-      <div><span class="item-label">Age:</span> {int(p['age'])}</div>
-      <div><span class="item-label">Sex:</span> {sex_label}</div>
-      <div><span class="item-label">Socio-economic status:</span> {ses_label}</div>
-    </div>
-  </div>
+<div class="card-badge cell badge {side}">{label}</div>
 
-  <!-- Risk -->
-  <div class="section">
-    <div class="section-title">Predicted Risk</div>
-    <div class="row row-2 rm-top">
-      <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>
-      <div><span class="item-label">Risk band for age:</span> {risk_band_label}</div>
-    </div>
-  </div>
-
-  <!-- Modifiers -->
-  <div class="section">
-    <div class="section-title">Risk Modifiers</div>
-    <div class="row row-3">
-      <div><span class="item-label">BMI:</span> {int(round(bmi_val))}</div>
-      <div><span class="item-label">Smoker:</span> {smoker_label}</div>
-      <div><span class="item-label">Diabetes:</span> {diabetes_label}</div>
-    </div>
-  </div>
-
-  <!-- Adherence -->
-  <div class="section">
-    <div class="section-title">Adherence</div>
-    <div class="row row-1 rm-top">
-      <div><span class="item-label">Medication adherence:</span> {adherence_lab}</div>
-    </div>
-  </div>
-
-  <!-- Recommendations (separate section) -->
-  <div class="section section-recs">
-    <div class="section-title">C-Pi recommendations</div>
-    <ul class="recs">{recs_html}</ul>
+<div class="section cell sec-demo {side}">
+  <div class="section-title">Demographics</div>
+  <div class="row row-3">
+    <div><span class="item-label">Age:</span> {int(p['age'])}</div>
+    <div><span class="item-label">Sex:</span> {sex_label}</div>
+    <div><span class="item-label">Socio-economic:</span> {ses_label}</div>
   </div>
 </div>
-"""
 
+<div class="section cell sec-risk {side}">
+  <div class="section-title">Predicted Risk</div>
+  <div class="row row-2 rm-top">
+    <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>
+    <div><span class="item-label">Risk band for age:</span> {risk_band_label}</div>
+  </div>
+</div>
+
+<div class="section cell sec-mods {side}">
+  <div class="section-title">Risk Modifiers</div>
+  <div class="row row-3">
+    <div><span class="item-label">BMI:</span> {int(round(bmi_val))}</div>
+    <div><span class="item-label">Smoker:</span> {smoker_label}</div>
+    <div><span class="item-label">Diabetes:</span> {diabetes_label}</div>
+  </div>
+</div>
+
+<div class="section cell sec-adh {side}">
+  <div class="section-title">Adherence</div>
+  <div class="row row-1 rm-top">
+    <div><span class="item-label">Medication adherence:</span> {adherence_lab}</div>
+  </div>
+</div>
+
+<div class="section section-recs cell sec-recs {side}">
+  <div class="section-title">C-Pi recommendations</div>
+  <ul class="recs">{recs_html}</ul>
+</div>
+"""
+    # avoid Markdown treating it like a code block
+    return textwrap.dedent(html).strip()
 
 st.markdown("""
 <style>
-.pair-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
-.card{background:var(--card-bg,#fff);border:3px solid var(--card-border,#ddd);border-radius:14px;padding:0;box-shadow:0 2px 6px rgba(0,0,0,.06)}
-.card.selected{background:var(--card-selected-bg,#f7fcf7);border-color:var(--card-selected-border,#34c759)}
-.card-badge{font-weight:700;font-size:.95rem;padding:10px 14px;border-bottom:2px solid var(--card-border-strong,#c9c9c9)}
-.section{padding:10px 14px 12px;border-bottom:2px solid var(--card-border-strong,#c9c9c9)}
+:root{
+  --page-bg:#ffffff; --page-fg:#111111;
+  --card-bg:#ffffff; --card-fg:#1f1f1f;
+  --card-border:#d7d7d7; --inset-divider:#dfdfdf;
+  --card-shadow:0 2px 6px rgba(0,0,0,.06);
+  --card-selected-bg:#f7fcf7; --card-selected-border:#34c759;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --page-bg:#0e0f12; --page-fg:#eaeaea;
+    --card-bg:#17181c; --card-fg:#e7e7e7;
+    --card-border:#2b2f36; --inset-divider:#2f333a;
+    --card-shadow:0 4px 14px rgba(0,0,0,.6);
+    --card-selected-bg:#132a1b; --card-selected-border:#2ecc71;
+  }
+}
+html, body{ background:var(--page-bg); color:var(--page-fg); }
+
+/* Two-column parent grid (shared row tracks) */
+.pair-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  column-gap:16px;
+  grid-template-areas:
+    "badgeL badgeR"
+    "demoL  demoR"
+    "riskL  riskR"
+    "modsL  modsR"
+    "adhL   adhR"
+    "recsL  recsR";
+  align-items:stretch;
+  color:var(--card-fg);
+}
+
+/* Sections placed directly into the grid */
+.cell{ z-index:1; }
+.badge.left  { grid-area:badgeL; }
+.badge.right { grid-area:badgeR; }
+.sec-demo.left  { grid-area:demoL; }
+.sec-demo.right { grid-area:demoR; }
+.sec-risk.left  { grid-area:riskL; }
+.sec-risk.right { grid-area:riskR; }
+.sec-mods.left  { grid-area:modsL; }
+.sec-mods.right { grid-area:modsR; }
+.sec-adh.left   { grid-area:adhL; }
+.sec-adh.right  { grid-area:adhR; }
+.sec-recs.left  { grid-area:recsL; }
+.sec-recs.right { grid-area:recsR; }
+
+/* The background/border frame spans all rows in its column */
+.frame{
+  grid-row:1 / -1;
+  position:relative;
+  z-index:0;
+  background:var(--card-bg);
+  border:3px solid var(--card-border);
+  border-radius:14px;
+  box-shadow:var(--card-shadow);
+}
+.frame.left  { grid-column:1; }
+.frame.right { grid-column:2; }
+.frame.selected{ background:var(--card-selected-bg); border-color:var(--card-selected-border); }
+
+/* Section + rows styling */
+.card-badge{font-weight:700;font-size:.95rem;padding:10px 14px;border-bottom:2px solid var(--inset-divider)}
+.section{padding:10px 14px 12px;border-bottom:2px solid var(--inset-divider)}
 .section:last-of-type{border-bottom:0}
 .section-title{font-weight:800;margin-bottom:8px}
 .row{display:grid}
-/* grids */
-.row-3{ grid-template-columns: 1fr 1fr 1fr; }
-.row-2{ grid-template-columns: 1fr 1fr; }
-.row-1{ grid-template-columns: 1fr; }
+.row-3{ grid-template-columns:1fr 1fr 1fr; }
+.row-2{ grid-template-columns:1fr 1fr; }
+.row-1{ grid-template-columns:1fr; }
+.row>*{padding:4px 10px 4px 0}
+.row>*:not(:first-child){border-left:2px solid var(--inset-divider);padding-left:12px}
+.rm-top{ margin-bottom:10px; }
 
-/* space so underline sits between rows/sections */
-.rm-top{ margin-bottom: 10px; }
-
-/* short underline under selected cells (risk items + adherence) */
-.row .has-sep{ position: relative; }
-.row .has-sep::after{
-  content:"";
-  display:block;
-  margin-top:6px;
-  width:min(80%, 190px);
-  border-top:2px solid var(--card-border-strong,#c9c9c9);
-}
-
-/* a touch more separation before recs (already its own section, this tightens it) */
-.section.section-recs{ padding-top: 12px; }
-
-.row-divider{
-  border-top: 2px solid var(--card-border-strong,#c9c9c9);
-  width: min(40%, 160px);   /* short line */
-  margin: 8px 0;            /* space above/below */
-}          
-.row > *{padding:4px 10px 4px 0}
-.row > *:not(:first-child){border-left:2px solid var(--card-border-strong,#c9c9c9);padding-left:12px}
-.item-label{font-weight:600;margin-right:6px}
-.item-label-2{margin-right:6px}
-
-.emphasis{color:#c40000;font-weight:700}
+/* Recs */
 ul.recs{margin:6px 0 0 1.1rem}
 ul.recs li{margin:.2rem 0}
-ul.recs li.cat-start{ margin-top: .45rem; }   /* small gap when category changes */
-.recs .rec-cat{
-  font-weight: 400;                  /* neutral weight */
-  text-decoration: underline;
-  text-underline-offset: 2px;        /* nicer spacing from text */
-  text-decoration-thickness: 2px;    /* a bit more visible */
-}
-.recs .rec-main{ font-weight: 700; }          /* main bold */
-.recs .rec-cost{ font-style: italic; }        /* cost italic */
-
-            
+ul.recs li.ghost{opacity:.45;font-style:italic}
+.recs .rec-cat{ text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:2px; }
+.recs .rec-main{ font-weight:700; }
+.recs .rec-cost{ font-style:italic; }
+.item-label{font-weight:600;margin-right:6px}
+.item-label-2{margin-right:6px}
 </style>
 """, unsafe_allow_html=True)
 
-
-# File A lives in your repo at: <repo>/data/file_a.xlsx  (change if needed)
 PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
-
 
 _RAW_REC_MAP = {
     "rec1":  {"DL": "Labs - for risk stratification / screening: lipid panel (cost 2)", "category": "Labs", "main": "lipid panel", "cost": "(cost 2)"},
@@ -150,20 +177,18 @@ _RAW_REC_MAP = {
     "rec3":  {"DL": "Labs - for risk stratification / screening:  Lp(a) (cost 6)", "category": "Labs", "main": "Lp(a)", "cost": "(cost 6)"},
     "rec4":  {"DL": "Labs - for treatment monitoring: LDL (cost 2)",  "category": "Labs", "main": "LDL", "cost": "(cost 2)"},
     "rec5":  {"DL": "Imaging - for risk stratification: carotid doppler (cost 20)",  "category": "Imaging", "main": "carotid doppler", "cost": "(cost 20)"},
-    "rec6":  {"DL": "Treatment - initiate first-line treatment: low dose statin (yearly cost 200)", "category": "Treatment", "main": "low dose statin", "cost": "(yearly cost 200)"}, 
+    "rec6":  {"DL": "Treatment - initiate first-line: low dose statin (yearly cost 200)", "category": "Treatment", "main": "low dose statin", "cost": "(yearly cost 200)"}, 
     "rec7":  {"DL": "Treatment - initiate advanced treatment: high dose statin (yearly cost 200)", "category": "Treatment", "main": "high dose statin", "cost": "(yearly cost 200)"}, 
     "rec8":  {"DL": "Treatment - prescribe advanced treatment: PCSK9 (yearly cost 20,000)", "category": "Treatment", "main": "PCSK9", "cost": "(yearly cost 20,000)"}, 
-    "rec9":  {"DL": "Treatment - upgrade: switch to a high dose statin (yearly cost 200)", "category": "Treatment", "main": "high dose statin", "cost": "(yearly cost 200)"},  
+    "rec9":  {"DL": "Treatment - upgrade: high dose statin (yearly cost 200)", "category": "Treatment", "main": "high dose statin", "cost": "(yearly cost 200)"},  
     "rec10": {"DL": "Treatment - replacement d/t contraindication: switch to PCSK9 (yearly cost 20,000)",  "category": "Treatment", "main": "PCSK9", "cost": "(yearly cost 20,000)"}, 
     "rec11": {"DL": "Consults - lipidologist consult: d/t statins failure/intolerance, to consider PCSK9 (cost 6)", "category": "Consults", "main": "lipidologist", "cost": "(cost 6)"}, 
     "rec12": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)", "category": "Consults", "main": "hepatology", "cost": "(cost 5)"}, 
-    "rec13": {"DL": "Lifestyle - package of nutritional consultation sessions (cost 20)",  "category": "Lifestyle", "main": "nutritional consultation", "cost": "(cost 20)"}, 
+    "rec13": {"DL": "Lifestyle - dietitian: package of nutritional consultation sessions (cost 20)",  "category": "Lifestyle", "main": "nutritional consultation", "cost": "(cost 20)"}, 
     "rec14": {"DL": "Treatment - discuss pros/cons of drugs vs. lifestyle changes in gray-zone patients (cost 2)",  "category": "Treatment", "main": "discuss pros/cons", "cost": "(cost 2)"}, 
     "rec15": {"DL": "Lifestyle - consult about exercise, nutrition, and smoking (cost 2)",  "category": "Lifestyle", "main": "exercise, nutrition, and smoking", "cost": "(cost 2)"},
     "rec16": {"DL": 'Lifestyle - reccomend the AHA "Heart & Stroke Helper" app to track lipids, meds and lifestyle (cost 0)',  "category": "Lifestyle", "main": '"Heart & Stroke Helper" app', "cost": "(cost 0)"}
 }
-
-
 
 # # old version
 # _RAW_REC_MAP = {
@@ -238,37 +263,26 @@ _RAW_REC_MAP = {
 #         prev_cat = cat
 #     return "".join(parts)
 
-# display order (fallback)
 _CATEGORY_ORDER = ["Labs", "Imaging", "Treatment", "Consults", "Lifestyle", "Other"]
 
-def recs_grouped_html_for_patient(p: dict, category_order: list[str] | None = None) -> str:
+def recs_grouped_html_for_patient(
+    p: dict,
+    category_order: list[str] | None = None,
+    per_category_master: dict[str, list[str]] | None = None
+) -> str:
     """
-    Returns HTML <li> items of FULL DL sentences (with styled cat/main/cost),
-    sorted by the provided category_order; falls back to _CATEGORY_ORDER.
+    Render FULL DL sentences with styled parts, aligned by a shared plan:
+    - category_order: order of categories (common first)
+    - per_category_master: for each category, the ordered list of DLs (common first,
+      then the side-unique ones). Missing items are shown as light placeholders to
+      preserve vertical alignment.
     """
     chosen = set(p.get("recommendations") or [])
-    if not chosen or chosen == {"no active recommendations"}:
-        return "<li>no active recommendations</li>"
-
     order = category_order or _CATEGORY_ORDER
-    order_index = {c: i for i, c in enumerate(order)}
 
-    items = []
-    for idx, (_, meta) in enumerate(_RAW_REC_MAP.items()):
-        dl = meta.get("DL", "")
-        if dl in chosen:
-            cat  = meta.get("category", "Other")
-            main = meta.get("main", "")
-            cost = meta.get("cost", "")
-            items.append((cat, idx, dl, main, cost))
+    # quick index from DL -> meta
+    dl2meta = {meta["DL"]: meta for meta in _RAW_REC_MAP.values()}
 
-    if not items:
-        return "<li>no active recommendations</li>"
-
-    # sort by pair-specific category order, then original map order
-    items.sort(key=lambda t: (order_index.get(t[0], 999), t[1]))
-
-    # Render full DL with targeted styling
     def _style_dl(dl: str, cat: str, main: str, cost: str) -> str:
         s = dl
         s = re.sub(r'^' + re.escape(cat) + r'(?=\s*-\s*)',
@@ -279,21 +293,67 @@ def recs_grouped_html_for_patient(p: dict, category_order: list[str] | None = No
             s = re.sub(re.escape(cost), f'<span class="rec-cost">{cost}</span>', s, count=1)
         return s
 
-    parts, prev_cat = [], None
-    for cat, _, dl, main, cost in items:
-        cls = "cat-start" if cat != prev_cat else ""
-        parts.append(f'<li class="{cls}">{_style_dl(dl, cat, main, cost)}</li>')
-        prev_cat = cat
-    return "".join(parts)
+    parts = []
+    # if we have a master plan: iterate exact rows; else fall back to simple grouping
+    if per_category_master:
+        for cat in order:
+            dls = per_category_master.get(cat, [])
+            first_in_cat = True
+            for dl in dls:
+                if dl in chosen:
+                    meta = dl2meta.get(dl, {})
+                    html = _style_dl(dl, cat, meta.get("main",""), meta.get("cost",""))
+                    cls = "cat-start" if first_in_cat else ""
+                    parts.append(f'<li class="{cls}">{html}</li>')
+                else:
+                    # placeholder row so identical recs align line-by-line
+                    cls = "cat-start ghost" if first_in_cat else "ghost"
+                    # parts.append(f'<li class="{cls}">—</li>')
+                first_in_cat = False
+        return "".join(parts)
 
-
-def rec_categories_for_patient(p: dict) -> set[str]:
-    chosen = set(p.get("recommendations") or [])
-    cats: set[str] = set()
+    # (fallback — not used when we pass a plan)
+    # flat, grouped by global order
+    by_cat = {}
     for _, meta in _RAW_REC_MAP.items():
-        if meta.get("DL", "") in chosen:
-            cats.add(meta.get("category", "Other"))
-    return cats
+        dl = meta["DL"]
+        if dl in chosen:
+            by_cat.setdefault(meta["category"], []).append(dl)
+    for cat in order:
+        for dl in by_cat.get(cat, []):
+            meta = dl2meta.get(dl, {})
+            html = _style_dl(dl, cat, meta.get("main",""), meta.get("cost",""))
+            parts.append(f'<li class="cat-start">{html}</li>')
+    return "".join(parts) or "<li>no active recommendations</li>"
+
+def recs_by_category_for_patient(p: dict) -> dict[str, list[str]]:
+    chosen = set(p.get("recommendations") or [])
+    out: dict[str, list[str]] = {}
+    for _, meta in _RAW_REC_MAP.items():
+        dl = meta["DL"]
+        if dl in chosen:
+            out.setdefault(meta["category"], []).append(dl)
+    return out
+
+def build_pair_recs_alignment_plan(pX: dict, pY: dict):
+    by_x = recs_by_category_for_patient(pX)
+    by_y = recs_by_category_for_patient(pY)
+
+    cats_x, cats_y = set(by_x.keys()), set(by_y.keys())
+    common = [c for c in _CATEGORY_ORDER if c in cats_x and c in cats_y]
+    rest   = [c for c in _CATEGORY_ORDER if c not in common and (c in cats_x or c in cats_y)]
+    category_order = common + rest
+
+    # per-category master list: common DLs first (map order), then X-only, then Y-only
+    per_cat: dict[str, list[str]] = {}
+    for cat in category_order:
+        xs = by_x.get(cat, [])
+        ys = by_y.get(cat, [])
+        commons = [dl for dl in xs if dl in ys]
+        x_only  = [dl for dl in xs if dl not in commons]
+        y_only  = [dl for dl in ys if dl not in commons]
+        per_cat[cat] = commons + x_only + y_only
+    return category_order, per_cat
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Small helpers
@@ -541,14 +601,14 @@ def validate_pairs_in_df(df: pd.DataFrame, pairs: List[Tuple[int, int]]) -> List
 def _instructions_body():
     st.markdown("""
 - You will see **pairs of patients** side by side (named X and Y).
-- For each patient you’ll get:
+- For each patient, you will see a card with information about that patient:
   1. Age
   2. Sex              
-  3. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
-  4. BMI
+  3. Socio-economic status 
+  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention), with risk band for age. 
   5. Smoking status
   6. Diabets status
-  7. Socio-economic level (1 lowest, 10 highest)
+  7.  BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
@@ -827,11 +887,11 @@ elif st.session_state.stage == "explain":
 - For each patient, you will see a card with information about that patient:
   1. Age
   2. Sex              
-  3. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
-  4. BMI
+  3. Socio-economic level (1 lowest, 10 highest)
+  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention), with risk band for age. 
   5. Smoking status
   6. Diabets status
-  7. Socio-economic level (1 lowest, 10 highest)
+  7.  BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 
@@ -894,29 +954,20 @@ elif st.session_state.stage == "running":
     # NEW: save JSON on every page
     save_progress_ui_json(key_suffix=f"run_{st.session_state.pair_counter}")
     
+
     pX = pair["patient_x"]
     pY = pair["patient_y"]
 
-    cats_x = rec_categories_for_patient(pX)
-    cats_y = rec_categories_for_patient(pY)
-
-    # Common categories first (in your global order), then the rest
-    common = [c for c in _CATEGORY_ORDER if c in cats_x and c in cats_y]
-    rest   = [c for c in _CATEGORY_ORDER if c not in common]
-    pair_category_order = common + rest
-
+    cat_order, per_cat_master = build_pair_recs_alignment_plan(pX, pY)
     current_choice = st.session_state.get(k_sel)
-    card_x = patient_card_html("Patient X", pX, current_choice == "Patient X", category_order=pair_category_order)
-    card_y = patient_card_html("Patient Y", pY, current_choice == "Patient Y", category_order=pair_category_order)
+
+    card_x = patient_card_html("Patient X", pX, current_choice == "Patient X", side="left",
+                            category_order=cat_order, per_category_master=per_cat_master)
+    card_y = patient_card_html("Patient Y", pY, current_choice == "Patient Y", side="right",
+                            category_order=cat_order, per_category_master=per_cat_master)
 
     st.markdown(f'<div class="pair-grid">{card_x}{card_y}</div>', unsafe_allow_html=True)
-    # Side-by-side boxes with highlight according to current selection
-    # current_choice = st.session_state.get(k_sel)  # "Patient X" / "Patient Y" / None
-    # card_x = patient_card_html("Patient X", pair["patient_x"], current_choice == "Patient X")
-    # card_y = patient_card_html("Patient Y", pair["patient_y"], current_choice == "Patient Y")
-
-    # st.markdown(f'<div class="pair-grid">{card_x}{card_y}</div>', unsafe_allow_html=True)
-   
+  
     st.markdown("")
 
     CONF_LABELS = {
