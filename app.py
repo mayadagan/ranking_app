@@ -257,7 +257,7 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
 .recs .rec-cat{ text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:2px; }
 .recs .rec-main{ font-weight:700; }
 .recs .rec-cost{ font-style:italic; }
-.item-label{font-weight:600;margin-right:6px}
+.item-label{margin-right:6px; text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:2px; }
 .item-label-2{margin-right:6px}
 .risk-pct{ font-weight: 700; }
      
@@ -335,7 +335,7 @@ body, html{
 }
 
 /* If you want headers a touch heavier without changing size */
-.section-title{ font-weight: 600;  }
+.section-title{ font-weight: 700;  }
 .card-badge{   font-weight: 700; }
             
             .card-badge,
