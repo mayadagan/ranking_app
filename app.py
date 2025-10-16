@@ -21,7 +21,6 @@ def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
 ABNORMAL_RULES = {
     "risk_band": {"medium": "orange", "high": "red"},
     "smoker": {"yes": "red"},
-    "ses": {"low": "red"},
     "adherence": {"low": "red"},
     # BMI handled by thresholds below
 }
@@ -125,6 +124,12 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
 
     # --- colorized display strings ---
     risk_band_disp = _colorize(risk_band_label, _abnormal_color("risk_band", risk_band_label))
+    risk_color = _abnormal_color("risk_band", risk_band_label)  # 'red' | 'orange' | None
+    risk_pct_span = (
+    f'<span class="risk-pct {risk_color}">{int(p["risk"])}%</span>'
+    if risk_color else
+    f'<span class="risk-pct">{int(p["risk"])}%</span>'
+    )
     smoker_disp    = _colorize(smoker_label,     _abnormal_color("smoker", smoker_label))
     ses_disp       = _colorize(ses_label,        _abnormal_color("ses", ses_label))
     # only color adherence if it's one of the graded labels (not the 'not applicable...' string)
@@ -150,7 +155,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
   <div class="section-title">Predicted Risk</div>
   <div class="row row-2 rm-top">
 <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>
-  <span class="risk-pct">{int(p['risk'])}%</span>
+  {risk_pct_span}
 </div>
     <div><span class="item-label">Risk band for age:</span> {risk_band_disp}</div>
   </div>
@@ -260,7 +265,9 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
 .item-label{margin-right:6px; text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:2px; }
 .item-label-2{margin-right:6px}
 .risk-pct{ font-weight: 700; }
-     
+.risk-pct.red{ color:#b00020; }
+.risk-pct.orange{ color:#e67e22; }
+
 .val {
   font-weight: 800;
   padding: 0 .25rem;
