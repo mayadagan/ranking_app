@@ -17,6 +17,96 @@ st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
     return mapping.get(val, fallback)
 
+# 1) Add these small helpers and rules near your function (or at top of the file)
+ABNORMAL_RULES = {
+    "risk_band": {"medium": "orange", "high": "red"},
+    "smoker": {"yes": "red"},
+    "ses": {"low": "red"},
+    "adherence": {"low": "red"},
+    # BMI handled by thresholds below
+}
+
+def _colorize(val: str, color: str | None) -> str:
+    return f'<span class="val {color}">{val}</span>' if color else val
+
+def _abnormal_color(name: str, value_str: str, value_num: float | None = None) -> str | None:
+    """
+    Returns a color name if abnormal, else None.
+    name: one of {'risk_band','smoker','ses','adherence','bmi'}
+    value_str: normalized, lowercase string label of the value to check
+    value_num: numeric value for thresholded checks (e.g., BMI)
+    """
+    if name == "bmi":
+        if value_num is None:
+            return None
+        if value_num >= 30:
+            return "red"
+        if value_num >= 25:
+            return "orange"
+        return None
+
+    rules = ABNORMAL_RULES.get(name, {})
+    return rules.get(value_str)  # returns color or None
+
+# def patient_card_html(label: str, p: dict, selected: bool, side: str,
+#                       category_order: list[str] | None = None,
+#                       per_category_master: dict[str, list[str]] | None = None) -> str:
+#     sex_label       = "male" if int(p["sex"]) == 1 else "female"
+#     smoker_label    = "yes" if int(p["smoker"]) == 1 else "no"
+#     diabetes_label  = "yes" if int(p["diabetes"]) == 1 else "no"
+#     ses_label       = _map_level(int(p["socio_economic"]), {1: "low", 2: "medium", 3: "high"})
+#     risk_band_label = _map_level(int(p.get("risk_band", 0)), {1: "low", 2: "medium", 3: "high"})
+#     adherence_val   = str(p.get("adherence", "none"))
+#     adherence_lab   = "not applicable (no chronic meds)" if adherence_val == "none" else adherence_val
+#     bmi_val         = float(p["bmi"])
+#     sel_class       = " selected" if selected else ""
+#     recs_html = recs_grouped_html_for_patient(
+#         p, category_order=category_order, per_category_master=per_category_master
+#     )
+#     abnornal_values = {risk_band_label: {"medium": "orange", "high": "red"}, smoker_label: {"yes": "red"}, ses_label: {"low": "red"}, adherence_lab: {"low": "red", "medium": "orange"}, bmi_val: {30: "red", 25: "orange"}}
+
+
+#     html = f"""
+# <div class="frame {side}{sel_class}"></div>
+
+# <div class="card-badge cell badge {side}">{label}</div>
+
+# <div class="section cell sec-demo {side}">
+#   <div class="section-title">Demographics</div>
+#   <div class="row row-3">
+#     <div><span class="item-label">Age:</span> {int(p['age'])}</div>
+#     <div><span class="item-label">Sex:</span> {sex_label}</div>
+#     <div><span class="item-label">Socio-economic:</span> {ses_label}</div>
+#   </div>
+# </div>
+
+# <div class="section cell sec-risk {side}">
+#   <div class="section-title">Predicted Risk</div>
+#   <div class="row row-2 rm-top">
+#     <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>
+#     <div><span class="item-label">Risk band for age:</span> {risk_band_label}</div>
+#   </div>
+# </div>
+
+# <div class="section cell sec-mods {side}">
+#   <div class="section-title">Modifiable Behavior</div>
+#   <div class="row row-3">
+#     <div><span class="item-label">BMI:</span> {int(round(bmi_val))}</div>
+#     <div><span class="item-label">Smoker:</span> {smoker_label}</div>
+#     <div><span class="item-label">Adherence:</span> {adherence_lab}</div>
+
+#   </div>
+# </div>
+
+
+# <div class="section section-recs cell sec-recs {side}">
+#   <div class="section-title">C-Pi recommendations</div>
+#   <ul class="recs">{recs_html}</ul>
+# </div>
+# """
+#     return textwrap.dedent(html).strip()
+
+# 2) Update your patient_card_html to colorize the displayed values
 def patient_card_html(label: str, p: dict, selected: bool, side: str,
                       category_order: list[str] | None = None,
                       per_category_master: dict[str, list[str]] | None = None) -> str:
@@ -33,41 +123,45 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
         p, category_order=category_order, per_category_master=per_category_master
     )
 
+    # --- colorized display strings ---
+    risk_band_disp = _colorize(risk_band_label, _abnormal_color("risk_band", risk_band_label))
+    smoker_disp    = _colorize(smoker_label,     _abnormal_color("smoker", smoker_label))
+    ses_disp       = _colorize(ses_label,        _abnormal_color("ses", ses_label))
+    # only color adherence if it's one of the graded labels (not the 'not applicable...' string)
+    adherence_disp = ( _colorize(adherence_lab, _abnormal_color("adherence", adherence_lab))
+                       if adherence_val != "none" else adherence_lab )
+    bmi_disp = _colorize(f"{bmi_val:.1f}", _abnormal_color("bmi", "", bmi_val))
+
     html = f"""
 <div class="frame {side}{sel_class}"></div>
 
 <div class="card-badge cell badge {side}">{label}</div>
 
 <div class="section cell sec-demo {side}">
-  <div class="section-title">Demographics</div>
+  <div class="section-title">Demographics</div>  
   <div class="row row-3">
     <div><span class="item-label">Age:</span> {int(p['age'])}</div>
     <div><span class="item-label">Sex:</span> {sex_label}</div>
-    <div><span class="item-label">Socio-economic:</span> {ses_label}</div>
+    <div><span class="item-label">Socio-economic:</span> {ses_disp}</div>
   </div>
 </div>
 
 <div class="section cell sec-risk {side}">
   <div class="section-title">Predicted Risk</div>
   <div class="row row-2 rm-top">
-    <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>
-    <div><span class="item-label">Risk band for age:</span> {risk_band_label}</div>
+<div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>
+  <span class="risk-pct">{int(p['risk'])}%</span>
+</div>
+    <div><span class="item-label">Risk band for age:</span> {risk_band_disp}</div>
   </div>
 </div>
 
 <div class="section cell sec-mods {side}">
-  <div class="section-title">Risk Modifiers</div>
+  <div class="section-title">Modifiable Behavior</div>
   <div class="row row-3">
-    <div><span class="item-label">BMI:</span> {int(round(bmi_val))}</div>
-    <div><span class="item-label">Smoker:</span> {smoker_label}</div>
-    <div><span class="item-label">Diabetes:</span> {diabetes_label}</div>
-  </div>
-</div>
-
-<div class="section cell sec-adh {side}">
-  <div class="section-title">Adherence</div>
-  <div class="row row-1 rm-top">
-    <div><span class="item-label">Medication adherence:</span> {adherence_lab}</div>
+    <div><span class="item-label">BMI:</span> {bmi_disp}</div>
+    <div><span class="item-label">Smoker:</span> {smoker_disp}</div>
+    <div><span class="item-label">Adherence:</span> {adherence_disp}</div>
   </div>
 </div>
 
@@ -76,7 +170,6 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
   <ul class="recs">{recs_html}</ul>
 </div>
 """
-    # avoid Markdown treating it like a code block
     return textwrap.dedent(html).strip()
 
 st.markdown("""
@@ -166,6 +259,100 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
 .recs .rec-cost{ font-style:italic; }
 .item-label{font-weight:600;margin-right:6px}
 .item-label-2{margin-right:6px}
+.risk-pct{ font-weight: 700; }
+     
+.val {
+  font-weight: 800;
+  padding: 0 .25rem;
+  border-radius: .35rem;
+}
+.val.red {
+  color: #b00020;
+}
+.val.orange {
+  color: #e67e22; /* lighter orange */
+}  
+/* (optional) subtle backgrounds for contrast – uncomment if you want chips */
+/*
+.val.red{ background:rgba(176,0,32,.12); }
+.val.orange{ background:rgba(192,86,0,.12); }
+color: #e67e22; /* lighter orange */
+            
+/* Make left & middle a bit narrower; right column broader */
+.sec-demo .row-3,
+.sec-mods .row-3{
+  grid-template-columns: 0.75fr 0.75fr 1.5fr;
+}
+
+/* (optional) on narrow screens, fall back to equal columns or a stack */
+@media (max-width: 900px){
+  .sec-demo .row-3,
+  .sec-mods .row-3{
+    grid-template-columns: 1fr 1fr 1fr; /* or: 1fr to stack */
+  }
+}
+
+}
+/* compact spacing inside cells */
+.pair-grid .card-badge{
+  padding: 8px 10px;
+}
+.pair-grid .section{
+  padding: 6px 10px 8px;   /* was 10px 14px 12px */
+}
+.pair-grid .section-title{
+  margin-bottom: 6px;      /* was 8px */
+}
+.pair-grid .row > *{
+  padding: 2px 6px 2px 0;  /* was 4px 10px 4px 0 */
+  line-height: 1.25;       /* slightly tighter */
+}
+/* keep the divider but reduce left padding for middle/right cells */
+.pair-grid .row > *:not(:first-child){
+  padding-left: 8px;       /* was 12px */
+}
+
+/* optional: tighten recs list a bit */
+.pair-grid ul.recs{ margin: 4px 0 0 1rem; }
+.pair-grid ul.recs li{ margin: .15rem 0; }
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap');
+
+/* Define font stacks so it's easy to switch later */
+:root{
+  --body-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+  --header-font: "Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+/* Apply */
+body, html{
+  font-family: var(--body-font);
+}
+.card-badge,
+.section-title{
+  font-family: var(--header-font);
+  letter-spacing: .2px;       /* tiny polish */
+}
+
+/* If you want headers a touch heavier without changing size */
+.section-title{ font-weight: 600;  }
+.card-badge{   font-weight: 700; }
+            
+            .card-badge,
+.card-badge,
+.section-title {
+  color: #444444; /* darker gray */
+}
+
+@media (prefers-color-scheme: dark) {
+  .card-badge,
+  .section-title {
+    color: #cccccc; /* balanced for dark mode */
+  }
+}
+}
+            
+           
 </style>
 """, unsafe_allow_html=True)
 
