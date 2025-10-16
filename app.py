@@ -792,10 +792,10 @@ def _instructions_body():
   1. Age
   2. Sex              
   3. Socio-economic status 
-  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention), with risk band for age. 
-  5. Smoking status
-  6. Diabets status
-  7.  BMI
+  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
+  5. Cardiovascular risk band for age (high, medium or low). 
+  6. Smoking status
+  7. BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
@@ -1074,14 +1074,13 @@ elif st.session_state.stage == "explain":
 - For each patient, you will see a card with information about that patient:
   1. Age
   2. Sex              
-  3. Socio-economic level (1 lowest, 10 highest)
-  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention), with risk band for age. 
-  5. Smoking status
-  6. Diabets status
-  7.  BMI
+  3. Socio-economic status 
+  4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
+  5. Cardiovascular risk band for age (high, medium or low). 
+  6. Smoking status
+  7. BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
   9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
-
     """
     )
 
