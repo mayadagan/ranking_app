@@ -26,7 +26,7 @@ ABNORMAL_RULES = {
 }
 
 def _colorize(val: str, color: str | None) -> str:
-    return f'<span class="val {color}">{val}</span>' if color else val
+    return f'<span class="val {color}">{val}</span>' if color else f'<span class="val_bold">{val}</span>'
 
 def _abnormal_color(name: str, value_str: str, value_num: float | None = None) -> str | None:
     """
@@ -43,9 +43,34 @@ def _abnormal_color(name: str, value_str: str, value_num: float | None = None) -
         if value_num >= 25:
             return "orange"
         return None
+    
+    if name == "risk_percentile":
+        if value_num is None:
+            return None
+        # 33–65.999... => orange, 66–100 => red
+        if 33 <= value_num < 66:
+            return "orange"
+        if 66 <= value_num <= 100:
+            return "red"
+        return None
 
     rules = ABNORMAL_RULES.get(name, {})
     return rules.get(value_str)  # returns color or None
+
+def percentile_label(p):
+    # for suffix logic, use the integer part
+    n = int(round(p))
+    last_two = n % 100
+    if 11 <= last_two <= 13:
+        suf = "th"
+    else:
+        last = n % 10
+        suf = {1: "st", 2: "nd", 3: "rd"}.get(last, "th")
+
+    # format number nicely (no trailing .0 if whole)
+    num_str = f"{p:g}"
+
+    return suf + ' percentile'
 
 # def patient_card_html(label: str, p: dict, selected: bool, side: str,
 #                       category_order: list[str] | None = None,
@@ -111,7 +136,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
                       per_category_master: dict[str, list[str]] | None = None) -> str:
     sex_label       = "male" if int(p["sex"]) == 1 else "female"
     smoker_label    = "yes" if int(p["smoker"]) == 1 else "no"
-    diabetes_label  = "yes" if int(p["diabetes"]) == 1 else "no"
+    # diabetes_label  = "yes" if int(p["diabetes"]) == 1 else "no"
     ses_label       = _map_level(int(p["socio_economic"]), {1: "low", 2: "medium", 3: "high"})
     risk_band_label = _map_level(int(p.get("risk_band", 0)), {1: "low", 2: "medium", 3: "high"})
     adherence_val   = str(p.get("adherence", "none"))
@@ -122,7 +147,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
         p, category_order=category_order, per_category_master=per_category_master
     )
 
-    # --- colorized display strings ---
+    # --- colorized risk band and score---
     risk_band_disp = _colorize(risk_band_label, _abnormal_color("risk_band", risk_band_label))
     risk_color = _abnormal_color("risk_band", risk_band_label)  # 'red' | 'orange' | None
     risk_pct_span = (
@@ -130,8 +155,22 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
     if risk_color else
     f'<span class="risk-pct">{int(p["risk"])}%</span>'
     )
+
+# --- risk percentile coloring ---
+    risk_pct_val        = int(p['risk_percentile'])
+    risk_percentile_lbl = percentile_label(risk_pct_val)
+    risk_pct_color      = _abnormal_color("risk_percentile", "", risk_pct_val)
+    risk_percentile_disp = _colorize(risk_pct_val, risk_pct_color)
+
+    # Optionally color the SCORE2 % with the same color
+    risk_pct_span = (
+        f'<span class="risk-pct {risk_pct_color}">{int(p["risk"])}%</span>'
+        if risk_pct_color else
+        f'<span class="risk-pct">{int(p["risk"])}%</span>'
+    )
+
     smoker_disp    = _colorize(smoker_label,     _abnormal_color("smoker", smoker_label))
-    ses_disp       = _colorize(ses_label,        _abnormal_color("ses", ses_label))
+    # ses_disp       = _colorize(ses_label,        _abnormal_color("ses", ses_label))
     # only color adherence if it's one of the graded labels (not the 'not applicable...' string)
     adherence_disp = ( _colorize(adherence_lab, _abnormal_color("adherence", adherence_lab))
                        if adherence_val != "none" else adherence_lab )
@@ -147,20 +186,20 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
   <div class="row row-3">
     <div><span class="item-label">Age:</span> {int(p['age'])}</div>
     <div><span class="item-label">Sex:</span> {sex_label}</div>
-    <div><span class="item-label">Socio-economic:</span> {ses_disp}</div>
+    <div><span class="item-label">Socio-economic:</span> {ses_label}</div>
   </div>
 </div>
 
 <div class="section cell sec-risk {side}">
   <div class="section-title">Predicted Risk</div>
   <div class="row row-2 rm-top">
-<div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>
-  {risk_pct_span}
-</div>
-    <div><span class="item-label">Risk band for age:</span> {risk_band_disp}</div>
+<!--<div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>-->
+<!--<div><span class="item-label">Risk percentile for age:</span>{int(p['risk_percentile'])}{risk_percentile_lbl}</div>-->
+    <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {risk_pct_span}</div>
+    <div><span class="item-label">Risk for age:</span> {risk_percentile_disp}{risk_percentile_lbl}</div>
+<!-- <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>  {risk_pct_span}</div>    <div><span class="item-label">Risk band for age:</span> {risk_band_disp}</div>  -->
   </div>
 </div>
-
 <div class="section cell sec-mods {side}">
   <div class="section-title">Modifiable Behavior</div>
   <div class="row row-3">
@@ -267,10 +306,9 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
 .risk-pct{ font-weight: 700; }
 .risk-pct.red{ color:#b00020; }
 .risk-pct.orange{ color:#e67e22; }
-
 .val {
   font-weight: 800;
-  padding: 0 .25rem;
+  padding: 0 .1rem;
   border-radius: .35rem;
 }
 .val.red {
@@ -590,6 +628,7 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["patient_num"] = df["patient_num"].astype(int)
     df["age"] = df["age"].astype(int)
     df["risk"] = df["risk"].astype(int)
+    df["risk_percentile"] = df["risk_percentile"].astype(int)
     df["sex"] = df["sex"].astype(int)
     df["bmi"] = df["bmi"].astype(float)
     df["adherence"] = df["adherence"].astype(str)
@@ -644,6 +683,7 @@ def normalize_patient(row_dict: dict) -> dict:
         "id": int(row_dict.get("patient_num")),
         "age": int(row_dict.get("age")),
         "risk": int(row_dict.get("risk")),
+        "risk_percentile": int(row_dict.get("risk_percentile")),
         "risk_band": int(row_dict.get("risk_band")),
         "sex": int(row_dict.get("sex")), 
         "bmi": float(row_dict.get("bmi")), 
@@ -800,16 +840,17 @@ def _instructions_body():
   2. Sex              
   3. Socio-economic status 
   4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
-  5. Cardiovascular risk band for age (high, medium or low). 
+  5. Risk percentile per the patient's age 
   6. Smoking status
   7. BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
-  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
+  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**
 - Note: in this study, we simulate the **dyslipidemia** population in C-Pi. Reccomendations and risk scores should be evaluated in this context.
 - Pick which patient should be **prioritized for proactive intervention** (higher on the C-Pi focus list).
 - Then choose **how sure you are** (1–5).
 - When you finish all pairs, click **download results** and email us the file.
     """, unsafe_allow_html=True)
+    # Cardiovascular risk band for age (high, medium or low). 
 
 # If your Streamlit has st.dialog, we define a modal
 if hasattr(st, "dialog"):
@@ -986,13 +1027,13 @@ if st.session_state.get("stage") == "login" or "user_name" not in st.session_sta
     st.stop()  # don’t render the rest of the app until login is done
 
 # Pages
-st.title("🩺 Patients Ranking Research")
+st.title("Patients Ranking Research")
 
 if st.session_state.stage == "upload":
-    st.header("Welcome to the Ranking Project!")
-    st.header("Let's get started.", divider="gray")
+    st.subheader("Welcome to the Ranking Project!")
+    st.subheader("Let's get started.", divider="gray")
 
-    st.subheader("Step 1 — Load the file you recieved by email")
+    st.info("**Step 1** — Load the file you recieved by email")
 
     # Show status of File A (auto-loaded from repo)
     try:
@@ -1000,12 +1041,16 @@ if st.session_state.stage == "upload":
         # st.success(f"File A loaded from repo: **{PATIENT_DF_PATH.name}**  •  Patients: **{len(df_preview)}**")
     except Exception as e:
         st.error(f"Problem loading data into app: {e}")
-
     # User only uploads File B
-    pairs_file = st.file_uploader("**Pairs for ranking** (JSON file)", type=["json", "pkl"])
-    st.subheader("Optional — load previous progress from this round")
+    pairs_file = st.file_uploader("Pairs for ranking (JSON file)", type=["json", "pkl"])
 
-    progress_file = st.file_uploader("**Optional** - load previous progress from this round (JSON)", type=["json"], key="progress_upload")
+    st.text("")
+    st.text("")
+    st.text("")
+
+    st.info("**Optional** — load previous progress from this round")
+
+    progress_file = st.file_uploader("Optional - load previous progress (JSON)", type=["json"], key="progress_upload")
 
     if st.button("Start", type="primary", disabled=not pairs_file):
         # Read File A from repo
@@ -1083,11 +1128,12 @@ elif st.session_state.stage == "explain":
   2. Sex              
   3. Socio-economic status 
   4. Cardiovascular risk score (SCORE2) - % risk for first CVD event in 10 years (primary prevention)
-  5. Cardiovascular risk band for age (high, medium or low). 
+  5. Risk percentile per the patient's age 
   6. Smoking status
   7. BMI
   8. Adherence level - assessed by dispensing stats of chronic medications in the last year (if the patient has chronic medications prescribed, else 'not applicable')            
-  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**. 
+  9. Recommendations this patient currently has on C-Pi, with their estimated **relative cost**
+
     """
     )
 
