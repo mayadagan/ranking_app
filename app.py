@@ -201,7 +201,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
   </div>
 </div>
 <div class="section cell sec-mods {side}">
-  <div class="section-title">Behavioral Risk Factors</div>
+  <div class="section-title">Behavioral Factors</div>
   <div class="row row-3">
     <div><span class="item-label">BMI:</span> {bmi_disp}</div>
     <div><span class="item-label">Smoker:</span> {smoker_disp}</div>
