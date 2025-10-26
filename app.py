@@ -19,7 +19,7 @@ def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
 
 # 1) Add these small helpers and rules near your function (or at top of the file)
 ABNORMAL_RULES = {
-    "risk_band": {"medium": "orange", "high": "red"},
+    # "risk_band": {"medium": "orange", "high": "red"},
     "smoker": {"yes": "red"},
     "adherence": {"low": "red"},
     # BMI handled by thresholds below
@@ -138,7 +138,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
     smoker_label    = "yes" if int(p["smoker"]) == 1 else "no"
     # diabetes_label  = "yes" if int(p["diabetes"]) == 1 else "no"
     ses_label       = _map_level(int(p["socio_economic"]), {1: "low", 2: "medium", 3: "high"})
-    risk_band_label = _map_level(int(p.get("risk_band", 0)), {1: "low", 2: "medium", 3: "high"})
+    # risk_band_label = _map_level(int(p.get("risk_band", 0)), {1: "low", 2: "medium", 3: "high"})
     adherence_val   = str(p.get("adherence", "none"))
     adherence_lab   = "not applicable (no chronic meds)" if adherence_val == "none" else adherence_val
     bmi_val         = float(p["bmi"])
@@ -148,13 +148,13 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
     )
 
     # --- colorized risk band and score---
-    risk_band_disp = _colorize(risk_band_label, _abnormal_color("risk_band", risk_band_label))
-    risk_color = _abnormal_color("risk_band", risk_band_label)  # 'red' | 'orange' | None
-    risk_pct_span = (
-    f'<span class="risk-pct {risk_color}">{int(p["risk"])}%</span>'
-    if risk_color else
-    f'<span class="risk-pct">{int(p["risk"])}%</span>'
-    )
+    # risk_band_disp = _colorize(risk_band_label, _abnormal_color("risk_band", risk_band_label))
+    # risk_color = _abnormal_color("risk_band", risk_band_label)  # 'red' | 'orange' | None
+    # risk_pct_span = (
+    # f'<span class="risk-pct {risk_color}">{int(p["risk"])}%</span>'
+    # if risk_color else
+    # f'<span class="risk-pct">{int(p["risk"])}%</span>'
+    # )
 
 # --- risk percentile coloring ---
     risk_pct_val        = int(p['risk_percentile'])
@@ -197,11 +197,11 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
 <!--<div><span class="item-label">Risk percentile for age:</span>{int(p['risk_percentile'])}{risk_percentile_lbl}</div>-->
     <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {risk_pct_span}</div>
     <div><span class="item-label">Risk for age:</span> {risk_percentile_disp}{risk_percentile_lbl}</div>
-<!-- <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>  {risk_pct_span}</div>    <div><span class="item-label">Risk band for age:</span> {risk_band_disp}</div>  -->
+<!-- <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>  {risk_pct_span}</div>    <div><span class="item-label">Risk band for age:</span> risk_band_disp</div>  -->
   </div>
 </div>
 <div class="section cell sec-mods {side}">
-  <div class="section-title">Modifiable Behavior</div>
+  <div class="section-title">Behavioral Risk Factors</div>
   <div class="row row-3">
     <div><span class="item-label">BMI:</span> {bmi_disp}</div>
     <div><span class="item-label">Smoker:</span> {smoker_disp}</div>
@@ -612,7 +612,7 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
 
     # Normalize & validate columns
     df.columns = [str(c) for c in df.columns]
-    required = {"patient_num", "age", "risk", "sex", "adherence", "bmi", "diabetes", "smoker", "socio_economic"}
+    required = {"patient_num", "age", "risk", "risk_percentile", "sex", "adherence", "bmi", "smoker", "socio_economic"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"patient_df missing required columns: {missing}")
@@ -632,7 +632,7 @@ def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     df["sex"] = df["sex"].astype(int)
     df["bmi"] = df["bmi"].astype(float)
     df["adherence"] = df["adherence"].astype(str)
-    df["diabetes"] = df["diabetes"].astype(int)
+    # df["diabetes"] = df["diabetes"].astype(int)
     df["smoker"] = df["smoker"].astype(int)
     df["socio_economic"] = df["socio_economic"].astype(int)
     return df
@@ -684,11 +684,11 @@ def normalize_patient(row_dict: dict) -> dict:
         "age": int(row_dict.get("age")),
         "risk": int(row_dict.get("risk")),
         "risk_percentile": int(row_dict.get("risk_percentile")),
-        "risk_band": int(row_dict.get("risk_band")),
+        # "risk_band": int(row_dict.get("risk_band")),
         "sex": int(row_dict.get("sex")), 
         "bmi": float(row_dict.get("bmi")), 
         "adherence": str(row_dict.get("adherence")), 
-        "diabetes": int(row_dict.get("diabetes")), 
+        # "diabetes": int(row_dict.get("diabetes")), 
         "smoker": int(row_dict.get("smoker")), 
         "socio_economic": int(row_dict.get("socio_economic")), 
         "recommendations": recs_from_row(row_dict),
@@ -726,7 +726,7 @@ def read_patient_df(file) -> pd.DataFrame:
     df.columns = [str(c) for c in df.columns]
 
     # Required columns
-    required = {"patient_num", "age", "risk", "sex", "adherence", "bmi", "diabetes", "smoker", "socio_economic"}
+    required = {"patient_num", "age", "risk", "risk_percentile", "sex", "adherence", "bmi", "smoker", "socio_economic"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"patient_df missing required columns: {missing}")
@@ -743,10 +743,11 @@ def read_patient_df(file) -> pd.DataFrame:
     df["patient_num"] = df["patient_num"].astype(int)
     df["age"] = df["age"].astype(int)
     df["risk"] = df["risk"].astype(int)
+    df["risk_percentile"] = df["risk_percentile"].astype(int)
     df["sex"] = df["sex"].astype(int)
     df["bmi"] = df["bmi"].astype(float)
     df["adherence"] = df["adherence"].astype(str)
-    df["diabetes"] = df["diabetes"].astype(int)
+    # df["diabetes"] = df["diabetes"].astype(int)
     df["smoker"] = df["smoker"].astype(int)
     df["socio_economic"] = df["socio_economic"].astype(int)
     return df
