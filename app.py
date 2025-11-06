@@ -312,7 +312,7 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
   border-radius: .35rem;
 }
 .val.red {
-  color: #b00020;
+  color: #d32f2f;
 }
 .val.orange {
   color: #e67e22; /* lighter orange */
