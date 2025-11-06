@@ -48,9 +48,9 @@ def _abnormal_color(name: str, value_str: str, value_num: float | None = None) -
         if value_num is None:
             return None
         # 33–65.999... => orange, 66–100 => red
-        if 33 <= value_num < 66:
+        if 85 <= value_num < 95:
             return "orange"
-        if 66 <= value_num <= 100:
+        if 95 <= value_num <= 100:
             return "red"
         return None
 
@@ -195,7 +195,7 @@ def patient_card_html(label: str, p: dict, selected: bool, side: str,
   <div class="row row-2 rm-top">
 <!--<div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {int(p['risk'])}%</div>-->
 <!--<div><span class="item-label">Risk percentile for age:</span>{int(p['risk_percentile'])}{risk_percentile_lbl}</div>-->
-    <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span> {risk_pct_span}</div>
+    <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span><span class="risk-pct">{int(p["risk"])}%</span></div>      
     <div><span class="item-label">Risk for age:</span> {risk_percentile_disp}{risk_percentile_lbl}</div>
 <!-- <div><span class="item-label-2"><span class="item-label">SCORE2</span>(10-year CVD risk):</span>  {risk_pct_span}</div>    <div><span class="item-label">Risk band for age:</span> risk_band_disp</div>  -->
   </div>
@@ -303,7 +303,7 @@ ul.recs li.ghost{opacity:.45;font-style:italic}
 .recs .rec-cost{ font-style:italic; }
 .item-label{margin-right:6px; text-decoration:underline; text-underline-offset:2px; text-decoration-thickness:2px; }
 .item-label-2{margin-right:6px}
-.risk-pct{ font-weight: 700; }
+.risk-pct{  }
 .risk-pct.red{ color:#b00020; }
 .risk-pct.orange{ color:#e67e22; }
 .val {
