@@ -20,8 +20,8 @@ def _map_level(val, mapping: dict, fallback: str = "unknown") -> str:
 # 1) Add these small helpers and rules near your function (or at top of the file)
 ABNORMAL_RULES = {
     # "risk_band": {"medium": "orange", "high": "red"},
-    "smoker": {"yes": "red"},
-    "adherence": {"low": "red"},
+    # "smoker": {"yes": "red"}, # can comment back in for coloring
+    # "adherence": {"low": "red"}, # can comment back in for coloring
     # BMI handled by thresholds below
 }
 
@@ -38,20 +38,22 @@ def _abnormal_color(name: str, value_str: str, value_num: float | None = None) -
     if name == "bmi":
         if value_num is None:
             return None
-        if value_num >= 30:
-            return "red"
-        if value_num >= 25:
-            return "orange"
+         # can comment back in for coloring
+        # if value_num >= 30:
+        #     return "red"
+        # if value_num >= 25:
+        #     return "orange"
         return None
     
     if name == "risk_percentile":
         if value_num is None:
             return None
-        # 33–65.999... => orange, 66–100 => red
-        if 85 <= value_num < 95:
-            return "orange"
-        if 95 <= value_num <= 100:
-            return "red"
+        # # 33–65.999... => orange, 66–100 => red
+         # can comment back in for coloring
+        # if 85 <= value_num < 95:
+        #     return "orange"
+        # if 95 <= value_num <= 100:
+        #     return "red"
         return None
 
     rules = ABNORMAL_RULES.get(name, {})
