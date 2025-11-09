@@ -590,7 +590,7 @@ def build_pair_recs_alignment_plan(pX: dict, pY: dict):
 # ─────────────────────────────────────────────────────────────────────────────
 # Small helpers
 
-@st.cache_data(show_spinner=False)
+# @st.cache_data(show_spinner=False)
 def load_patient_df_from_repo(path: Path | str | PathLike) -> pd.DataFrame:
     path = Path(path)
     if not path.exists():
