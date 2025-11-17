@@ -419,7 +419,7 @@ _RAW_REC_MAP = {
     "rec11": {"DL": "Consults - lipidologist consult: d/t statins failure/intolerance, to consider PCSK9 (cost 6)", "category": "Consults", "main": "lipidologist", "cost": "(cost 6)"}, 
     "rec12": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)", "category": "Consults", "main": "hepatology", "cost": "(cost 5)"}, 
     "rec13": {"DL": "Lifestyle - dietitian: package of nutritional consultation sessions (cost 20)",  "category": "Lifestyle", "main": "nutritional consultation", "cost": "(cost 20)"}, 
-    "rec14": {"DL": "Treatment - discuss pros/cons of drugs vs. lifestyle changes in gray-zone patients (cost 2)",  "category": "Treatment", "main": "discuss pros/cons", "cost": "(cost 2)"}, 
+    "rec14": {"DL": "Treatment - discuss pros/cons of statins vs. lifestyle changes in gray-zone patients (cost 2)",  "category": "Treatment", "main": "discuss pros/cons", "cost": "(cost 2)"}, 
     "rec15": {"DL": "Lifestyle - consult about exercise, nutrition, and smoking (cost 2)",  "category": "Lifestyle", "main": "exercise, nutrition, and smoking", "cost": "(cost 2)"},
     "rec16": {"DL": 'Lifestyle - reccomend the AHA "Heart & Stroke Helper" app to track lipids, meds and lifestyle (cost 0)',  "category": "Lifestyle", "main": '"Heart & Stroke Helper" app', "cost": "(cost 0)"}
 }
