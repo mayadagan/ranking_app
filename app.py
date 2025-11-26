@@ -406,7 +406,7 @@ body, html{
 PATIENT_DF_PATH = (Path(__file__).parent / "patient_df.csv").resolve()
 
 _RAW_REC_MAP = {
-    "rec1":  {"DL": "Labs - for risk stratification / screening: lipid panel (cost 2)", "category": "Labs", "main": "lipid panel", "cost": "(cost 2)"},
+    "rec1":  {"DL": "Labs - for screening: lipid panel (cost 2)", "category": "Labs", "main": "lipid panel", "cost": "(cost 2)"},
     "rec2":  {"DL": "Labs - for treatment monitoring: liver enzymes (cost 1)", "category": "Labs", "main": "liver enzymes", "cost": "(cost 1)"},
     "rec3":  {"DL": "Labs - for risk stratification / screening:  Lp(a) (cost 6)", "category": "Labs", "main": "Lp(a)", "cost": "(cost 6)"},
     "rec4":  {"DL": "Labs - for treatment monitoring: LDL (cost 2)",  "category": "Labs", "main": "LDL", "cost": "(cost 2)"},
@@ -416,12 +416,11 @@ _RAW_REC_MAP = {
     "rec8":  {"DL": "Treatment - prescribe advanced treatment: PCSK9 (yearly cost 20,000)", "category": "Treatment", "main": "PCSK9", "cost": "(yearly cost 20,000)"}, 
     "rec9":  {"DL": "Treatment - upgrade: high dose statin (yearly cost 200)", "category": "Treatment", "main": "high dose statin", "cost": "(yearly cost 200)"},  
     "rec10": {"DL": "Treatment - replacement d/t contraindication: switch to PCSK9 (yearly cost 20,000)",  "category": "Treatment", "main": "PCSK9", "cost": "(yearly cost 20,000)"}, 
-    "rec11": {"DL": "Consults - lipidologist consult: d/t statins failure/intolerance, to consider PCSK9 (cost 6)", "category": "Consults", "main": "lipidologist", "cost": "(cost 6)"}, 
-    "rec12": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)", "category": "Consults", "main": "hepatology", "cost": "(cost 5)"}, 
-    "rec13": {"DL": "Lifestyle - dietitian: package of nutritional consultation sessions (cost 20)",  "category": "Lifestyle", "main": "nutritional consultation", "cost": "(cost 20)"}, 
-    "rec14": {"DL": "Treatment - discuss pros/cons of statins vs. lifestyle changes in gray-zone patients (cost 2)",  "category": "Treatment", "main": "discuss pros/cons", "cost": "(cost 2)"}, 
-    "rec15": {"DL": "Lifestyle - consult about exercise, nutrition, and smoking (cost 2)",  "category": "Lifestyle", "main": "exercise, nutrition, and smoking", "cost": "(cost 2)"},
-    "rec16": {"DL": 'Lifestyle - reccomend the AHA "Heart & Stroke Helper" app to track lipids, meds and lifestyle (cost 0)',  "category": "Lifestyle", "main": '"Heart & Stroke Helper" app', "cost": "(cost 0)"}
+    "rec11": {"DL": "Consults - hepatology consult: d/t high liver enzymes after statin initiation (cost 5)", "category": "Consults", "main": "hepatology", "cost": "(cost 5)"}, 
+    "rec12": {"DL": "Lifestyle - dietitian: package of nutritional consultation sessions (cost 20)",  "category": "Lifestyle", "main": "nutritional consultation", "cost": "(cost 20)"}, 
+    "rec13": {"DL": "Treatment - discuss pros/cons of statins vs. lifestyle changes in gray-zone patients (cost 2)",  "category": "Treatment", "main": "discuss pros/cons", "cost": "(cost 2)"}, 
+    "rec14": {"DL": "Lifestyle - consult about exercise, nutrition, and smoking (cost 2)",  "category": "Lifestyle", "main": "exercise, nutrition, and smoking", "cost": "(cost 2)"},
+    "rec15": {"DL": 'Lifestyle - reccomend the AHA "Heart & Stroke Helper" app to track lipids, meds and lifestyle (cost 0)',  "category": "Lifestyle", "main": '"Heart & Stroke Helper" app', "cost": "(cost 0)"}
 }
 
 # # old version
