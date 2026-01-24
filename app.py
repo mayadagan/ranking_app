@@ -11,6 +11,8 @@ from pathlib import Path
 import json, pickle
 import re
 import textwrap
+from supabase import create_client
+
 
 st.set_page_config(page_title="Ranking Study", page_icon="🩺", layout="wide")
 
@@ -664,6 +666,43 @@ def _compose_output_filename(upload_name: str, user_name: str | None) -> str:
 
     return f"{stem}.json"
 
+@st.cache_resource
+def get_supabase():
+    return create_client(
+        st.secrets["SUPABASE_URL"],
+        st.secrets["SUPABASE_ANON_KEY"],
+    )
+
+def sb_load_snapshot(user_name: str, pair_file: str) -> dict | None:
+    """Return latest snapshot dict or None."""
+    sb = get_supabase()
+    res = (
+        sb.table("progress_snapshots")
+        .select("snapshot")
+        .eq("user_name", user_name)
+        .eq("pair_file", pair_file)
+        .order("updated_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    rows = getattr(res, "data", None) or []
+    if not rows:
+        return None
+    return rows[0].get("snapshot")
+
+def sb_save_snapshot(user_name: str, pair_file: str, snapshot: dict) -> None:
+    """Upsert snapshot for (user_name, pair_file)."""
+    sb = get_supabase()
+    sb.table("progress_snapshots").upsert(
+        {
+            "user_name": user_name,
+            "pair_file": pair_file,
+            "snapshot": snapshot,  # jsonb
+            "updated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        },
+        on_conflict="user_name,pair_file",
+    ).execute()
+
 def _rec_columns(df: pd.DataFrame) -> List[str]:
     return [c for c in df.columns if str(c).lower().startswith("rec")]
 
@@ -1100,6 +1139,18 @@ if st.session_state.stage == "upload":
         st.session_state.pair_counter = 0
         st.session_state.results = [None] * len(prepared)
 
+        # --- NEW: if no manual progress file uploaded, try server resume from Supabase ---
+        if progress_file is None:
+            try:
+                pair_file_name = st.session_state.input_filename
+                snap = sb_load_snapshot(st.session_state.user_name, pair_file_name)
+                if snap:
+                    placed, n, next_idx = apply_snapshot_to_session_smart(snap)
+                    st.session_state.placed = placed
+                    st.success(f"Resumed saved progress: {placed}/{n} answers. Continuing at pair {min(next_idx+1, n)}.")
+            except Exception as e:
+                st.warning(f"Could not load saved progress from server: {e}")
+
         if progress_file is not None:
             try:
                 snapshot = load_progress_json(progress_file)
@@ -1182,6 +1233,7 @@ elif st.session_state.stage == "running":
     k_conf = f"conf_{st.session_state.pair_counter}"
 
     st.markdown("#### Which patient should be prioritized for proactive intervention?")
+
     st.caption(f"Pair {st.session_state.idx+1} of {total}")
 
     # Derive output name from the uploaded file + user
@@ -1261,6 +1313,17 @@ elif st.session_state.stage == "running":
         st.session_state.results[st.session_state.idx] = (out_pair, int(conf))
         st.session_state.idx += 1
         st.session_state.pair_counter += 1
+        # --- NEW: autosave snapshot to Supabase ---
+        try:
+            snapshot = _build_results_payload()
+            sb_save_snapshot(
+                user_name=st.session_state.user_name,
+                pair_file=st.session_state.input_filename,
+                snapshot=snapshot,
+            )
+        except Exception as e:
+            st.warning(f"Autosave failed (server): {e}")
+
         st.rerun()
 
     st.divider()
